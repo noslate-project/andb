@@ -39,7 +39,7 @@ andb 是适用于 gdb/lldb 的 v8 离线调试工具，一般用于调试 v8 的
 
 ```bash
 # 设置环境变量, alias andb
-git clone git@github.com:noslate-project/debugger.git
+git clone git@github.com:noslate-project/andb.git
 cd andb
 source env.sh
 ```
