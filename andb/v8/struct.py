@@ -222,13 +222,18 @@ class GlobalHandles(Struct):
 
         def Iterate(self, v):
             ptr = self['first_used_block_']
+            cnt = 0
             while ptr != 0:
                 for i in range(Internal.kBlockSize):
                     x = ptr['nodes_'][i].AddressOf()
                     node = GlobalHandles.Node(x)
                     if node.isRetainer():
                         v.VisitRootPointer(Root.kGlobalHandles, node.label, ObjectSlot(node.location))
+                        cnt += 1
+                        if cnt % 10000 == 0:
+                            print("handles: %d" % cnt)
                 ptr = ptr['next_used_']
+            print("handles: %d" % cnt)
 
     class OnStackTracedNodeSpace(Struct):
         """ introduced by v8.8, holds the on stack global handles.
@@ -400,7 +405,9 @@ class Heap(Struct):
 
         s = int(self[ "%s_" % space_name ])
         if space_id == AllocationSpace.NEW_SPACE:
-            return NewSpace(s) 
+            return NewSpace(s)
+        elif space_id == AllocationSpace.RO_SPACE:
+            return ReadOnlySpace(s)
         return PagedSpace(s)
 
     def GetNativeContextList(self):
@@ -537,7 +544,7 @@ class ReadOnlyHeap(Struct):
     @property
     def read_only_space(self):
         p = self['read_only_space_']
-        return Space(p)
+        return p
 
 class ReadOnlyRoots(Struct):
     _typeName = 'v8::internal::ReadOnlyRoots'
@@ -793,6 +800,33 @@ class NewSpace(SpaceWithLinearArea):
         print("%-14s: %10u" % (self.name, to_committed + from_committed))
         print(" - from_space : %10u" % from_committed)
         print(" - to_space   : %10u" % to_committed)
+
+if Version.major >= 9:
+    class ReadOnlySpace(Struct):
+        _typeName = 'v8::internal::ReadOnlySpace'
+     
+        @property
+        def id(self):
+            return self['id_']
+
+        @property
+        def name(self):
+            return AllocationSpace.Name(self.id)
+
+        @property
+        def committed(self):
+            return self['committed_']._unsigned
+        
+        @property
+        def max_committed(self):
+            return self['max_committed_']._unsigned
+
+        def show_sl(self):
+            print("%-14s: %10u %10u" % (self.name, self.committed, self.max_committed))
+
+else:
+    class ReadOnlySpace(PagedSpace):
+        _typeName = 'v8::internal::ReadOnlySpace'
 
 
 class Relocatable(Struct):

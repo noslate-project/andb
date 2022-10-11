@@ -7,6 +7,7 @@ from __future__ import print_function, division
 from abc import ABCMeta, abstractmethod
 import re
 
+from andb.stl import Vector
 from .internal import ObjectSlot, ObjectSlots
 from andb.config import Config
 
@@ -16,10 +17,13 @@ class SpaceIterator:
     """ iterator for heap spaces"""
     _next_space = 0
 
-    def __init__(self, heap):
+    def __init__(self, heap, non_ro=0):
         self._heap = heap
         self._next_space = 0
-        self._all_spaces = AllocationSpace.AllSpaces()
+        if non_ro:
+            self._all_spaces = AllocationSpace.NonROSpaces()
+        else:
+            self._all_spaces = AllocationSpace.AllSpaces()
 
     def HasNext(self):
         """ true if not EOF """
@@ -243,7 +247,7 @@ class HeapObjectIterator:
 
     def __init__(self, heap):
         self._heap = heap
-        self._iter_space = SpaceIterator(heap)
+        self._iter_space = SpaceIterator(heap, non_ro=1)
 
     def __iter__(self):
         return self
@@ -289,6 +293,59 @@ class HeapObjectIterator:
         """ compact with py2 """
         return self.__next__()
 
+class ReadOnlyPagesObjectIterator:
+    _space = None
+    _iter_vector = None
+    _iter_obj = None
+
+    def __init__(self, space):
+        self._space = space
+        self._iter_vector = Vector(space['pages_']).__iter__()
+
+    def __iter__(self):
+        return self
+
+    def nextObj(self):
+        if self._iter_obj is None:
+            return None
+        try:
+            o = next(self._iter_obj)
+            return o
+        except StopIteration:
+            #print("finish page")
+            return None
+
+    def nextPage(self):
+        try:
+            p = next(self._iter_vector)
+            return MemoryChunk(p)
+        except StopIteration:
+            #print("finish space")
+            raise StopIteration
+
+    def __next__(self):
+        # has next
+        o = self.nextObj()
+        if o is not None:
+            return o
+
+        while o is None:
+            # next chunk
+            p = self.nextPage()
+
+            # reset iterator object
+            self._iter_obj = ChunkObjectIterator(p)
+            
+            # must have
+            o = self.nextObj()
+
+        return o
+
+    def next(self):
+        """ compact with py2 """
+        return self.__next__()
+
+
 class ReadOnlyHeapObjectIterator:
     """ Iterator for all objects in Readonly Heap """
     
@@ -298,8 +355,11 @@ class ReadOnlyHeapObjectIterator:
     def __init__(self, ro_heap):
         self._ro_heap = ro_heap
         space = ro_heap.read_only_space
-        self._iter_obj = PagedSpaceObjectIterator(space)
-   
+        if space.has("memory_chunk_list_"):
+            self._iter_obj = PagedSpaceObjectIterator(space)
+        else:
+            self._iter_obj = ReadOnlyPagesObjectIterator(space)
+
     def __iter__(self):
         return self
 

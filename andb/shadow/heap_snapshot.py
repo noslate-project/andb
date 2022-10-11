@@ -460,8 +460,8 @@ class HeapSnapshot:
         """
         heap_obj = obj
         #heap_obj = v8.HeapObject(obj)
-        obj_type = heap_obj.instance_type
-        #print("AddEntryObject(0x%x), %s" % (heap_obj.address, v8.InstanceType.Name(obj_type)))
+        obj_type = heap_obj.map.instance_type
+        #print("AddEntryObject(0x%x), Map(0x%x), %s" % (heap_obj.address, heap_obj.map, v8.InstanceType.Name(obj_type)))
         #import traceback
         #traceback.print_stack()
 
