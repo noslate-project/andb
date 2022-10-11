@@ -313,6 +313,9 @@ class HeapObject(Object, Value):
     def __int__(self):
         return self.tag
 
+    def StrongTag(self):
+        return self.tag | Internal.kHeapObjectTag
+
     @classmethod
     def FromAddress(cls, ptr):
         # let tagging happy
@@ -469,11 +472,13 @@ class HeapObject(Object, Value):
         elif InstanceType.isScopeInfo(self.instance_type):
             o = ScopeInfo(self)
             mid = o.FunctionName()
-       
+    
+        tag = self.StrongTag()
+
         if mid is None:
-            return "<%s 0x%x>" % (self.instance_type.camel_name, self.tag)
+            return "<%s 0x%x>" % (self.instance_type.camel_name, tag)
         else:
-            return "<%s %s 0x%x>" % (self.instance_type.camel_name, TextShort(mid), self.tag)
+            return "<%s %s 0x%x>" % (self.instance_type.camel_name, TextShort(mid), tag)
 
     def _SizeByType(self):
         m = self.map
