@@ -1591,7 +1591,7 @@ class String(Name):
         elif t == Internal.kThinStringTag:
             v = self.Cast(ThinString)
         else:
-            raise IndexError(t, obj)
+            raise IndexError(t, "0x%x" % self)
         return v
 
     @staticmethod

@@ -157,7 +157,7 @@ class Value(intf.Value):
             v = self._I_value.GetChildMemberWithName(member_name_or_index)
         else:
             raise Exception
-
+        
         "lldb use Synthetic to format pretty print, here get the raw value"
         if v.IsSynthetic():
             #print("IsSynthetic", v)
@@ -215,7 +215,8 @@ class Value(intf.Value):
     def has(self, name):
         try:
             x = self[name]
-            return x is not None
+            #print ("has (%s) = %s, %s" % (name, x.size > 0, x))
+            return x.size > 0 
         except:
             return False
 
