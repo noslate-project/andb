@@ -472,6 +472,10 @@ class HeapObject(Object, Value):
         elif InstanceType.isScopeInfo(self.instance_type):
             o = ScopeInfo(self)
             mid = o.FunctionName()
+        
+        elif InstanceType.isOddball(self.instance_type):
+            o = Oddball(self)
+            mid = o.CamelName()
     
         tag = self.StrongTag()
 
@@ -950,6 +954,15 @@ class Oddball(HeapObject):
 
     def __str__(self):
         return str(self.to_string)
+
+    def CamelName(self):
+        s = str(self.to_string).lower().capitalize() 
+        if s.find('_') > 0:
+            y = []
+            for x in s.split('_'):
+                y.append(x.lower().capitalize())
+            return ''.join(y)
+        return s
 
     def IsFalse(self):
         return int(self.kind) == self.kFalse
