@@ -10,7 +10,8 @@ class Dwf:
     def Load(cls, filename):
         cls.raw = RawDwarf(filename)
         cls.raw.Load()
-   
+        cls.raw.ReadAllVariables()
+
     @classmethod
     def ReadConst(cls, const_key):
         """ read const from typ file.

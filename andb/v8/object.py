@@ -3938,7 +3938,7 @@ class ObjectMap:
         last_type = InstanceType.LAST_TYPE
         if last_type is None:
             log.critical("Can't get InstaceType.LAST_TYPE.")
-        elif last_type > 2000:
+        elif last_type > 3000:
             log.warn("InstanceType range (%d) is too large." % last_type)
 
         # create the InstanceType to Class array.
