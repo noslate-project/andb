@@ -519,8 +519,8 @@ class PropertyCellType(Enum):
 
 
 class PropertyCellConstantType(Enum):
-    _typeName = 'v8::internal::PropertyCellConstantType'
-
+    #_typeName = 'v8::internal::PropertyCellConstantType'
+    pass
 
 class Root(Enum):
     _typeName = 'v8::internal::Root'
@@ -592,6 +592,9 @@ class Root(Enum):
             # following two types were introduced by V8-v9
             "kWriteBarrier": "(Write barrier)",
             "kRetainMaps": "(Retain maps)",
+            # following types were introduced by v8-10
+            "kSharedHeapObjectCache": "(Shareable object cache)",
+            "kClientHeap": "(Client heap)",
             # kClientHeap was introduced by V8-v10
             "kUnknown": "(Unknown)",
         }

@@ -38,8 +38,9 @@ class Builtins(Struct):
 
     def Address(self, index):
         iso = self.parent
-        tbl = iso['isolate_data_']['builtins_']
-        return tbl[index].AddressOf()
+        tbl = iso.builtin_table_
+        v = tbl[index].AddressOf()
+        return v
 
     def Iterate(self, v):
         for i in range(self.Count()):
@@ -125,7 +126,12 @@ class Isolate(Struct):
 
     @CachedProperty
     def _roots_table(self):
-        v = self['isolate_data_']['roots_'].AddressOf()
+        if self['isolate_data_'].has('roots_'):
+            v = self['isolate_data_']['roots_'].AddressOf()
+        elif self['isolate_data_'].has('roots_table_'):
+            v = self['isolate_data_']['roots_table_'].AddressOf()
+        else:
+            raise Exception('RootsTable not found.')
         return RootsTable(v, self)
 
     def Roots(self):
@@ -139,6 +145,15 @@ class Isolate(Struct):
 
     def CompilationCache(self):
         return CompilationCache(self['compilation_cache_'], self)
+
+    @property
+    def builtin_table_(self):
+        if self['isolate_data_'].has('builtins_'):
+            return self['isolate_data_']['builtins_']
+        elif self['isolate_data_'].has('builtin_table_'):
+            return self['isolate_data_']['builtin_table_']
+        else:
+            raise Exception('Builtins not found.')
 
     def Builtins(self):
         return Builtins(self['builtins_'], self)
