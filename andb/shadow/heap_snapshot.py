@@ -1142,7 +1142,7 @@ class HeapSnapshot:
 
                 # tag Object
                 if root == v8.Root.kBuiltins:
-                    assert v8.InstanceType.isCode(obj.instance_type)
+                    assert v8.InstanceType.isCode(obj.instance_type), obj.instance_type
                     self._snapshot.TagObject(p, "(%s builtin)" % str(desc))
 
                 # set to GC subroot reference

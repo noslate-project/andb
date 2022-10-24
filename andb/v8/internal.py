@@ -486,6 +486,7 @@ class AutoLayout:
 
         # using property name
         off, size = _ResolveConst(n['property_name'])
+        #print(n['property_name'], off, size)
 
         # try alias
         if off is None:
