@@ -60,7 +60,7 @@ class Command(intf.Command, gdb.Command):
 
     @classmethod
     def Register(cls):
-        print(cls())
+        pass
 
     def invoke(self, arg, tty):
         child_fn = getattr(self, 'Dispatch')
@@ -704,6 +704,10 @@ class Target(intf.Target):
         v = t.value()
         return Value(v) 
 
+    @classmethod
+    def MemoryDump(cls, file_to_save, start_address, end_address):
+        v = gdb.execute('dump memory %s 0x%x 0x%x' % (file_to_save, start_address, end_address), to_string = True)
+        return v
 
 """ Stack Frames
 """

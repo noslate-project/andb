@@ -31,6 +31,7 @@ def Load():
     # register all commands
     from . import cli
     cli.CommandPrefix.RegisterAll()
+    cli.Command.RegisterAll()
 
     t2 = time()
     print("andb loaded, cost %0.3f seconds." % (t2 - t1))

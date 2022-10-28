@@ -23,12 +23,6 @@ class cli_test_autolayout(Command):
     def invoke(self, argv):
         ObjectVisitor().TestAutoLayout(argv)
 
-class cli_test_f1(Command):
-    _cxpr = 'test f1'
-
-    def invoke(self, argv):
-        pass
-
 class cli_test_find_double_in_range(Command):
     _cxpr = "test double"
 
