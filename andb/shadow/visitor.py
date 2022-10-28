@@ -454,6 +454,8 @@ class HeapVisitor:
         print("objects:", len(done))
         print("follow_size:", total_size)
 
+
+
 class ObjectVisitor:
     """
         v8 object  convenient visitor
@@ -569,4 +571,46 @@ class StackVisitor:
     def Backtrace(self):
         #dbg.Target.WalkStackFrames(self.frame)
         dbg.Thread.BacktraceCurrent(self.parse)
+
+
+class StringVisitor(object):
+
+    @classmethod
+    def SaveFile(cls, tag, file_to_save = None):
+        o = v8.String(tag)
+        if not v8.InstanceType.isString(o.instance_type):
+            print("only support String object") 
+            return 
+
+        return o.SaveFile(file_to_save)
+
+    @classmethod
+    def StartsWithSave(self, argv):
+        iso = v8.Isolate.GetCurrent()
+        hp = iso.Heap()
+        space = hp.getSpace(argv[0])
+        if space is None:
+            return
+
+        cnt = 0 
+        size = 0
+        sz = argv[1]
+        print("find %s" % sz)
+        l = len(sz)
+        for obj in v8.PagedSpaceObjectIterator(space):
+            if not v8.InstanceType.isString(obj.instance_type):
+                continue
+
+            o = v8.String(obj)
+            v = o.to_string()[:l]
+            if not v.startswith(sz):
+                continue
+            
+            cnt += 1
+            size += obj.Size()
+            
+            f = o.SaveFile()
+            print("%d: %10u %s" % (cnt, size, f))
+
+        print("Total Cnt(%d), Size(%d)" % (cnt, size))
 

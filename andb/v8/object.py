@@ -1636,6 +1636,15 @@ class String(Name):
     def __str__(self):
         return self.to_string()
 
+    def SaveFile(self, file_to_save = None):
+        start_address = self.address + self.kHeaderSize 
+        end_address = start_address + self.Size()
+
+        if file_to_save is None:
+            file_to_save = "string_0x%x.raw" % self.tag 
+        dbg.Target.MemoryDump(file_to_save, start_address, end_address)
+        return file_to_save
+
     def DebugPrint(self):
         # first show string
         log.print(self.ToString())

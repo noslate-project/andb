@@ -154,6 +154,24 @@ class cli_heap_follow(Command):
     def invoke (self, argv):
         HeapVisitor().FollowTag(argv)
 
+class cli_heap_string_save(Command):
+    _cxpr = 'heap string save' 
+
+    def invoke(self, argv):
+        if len(argv) == 0:
+            print("heap string save <tag>")
+        
+        f = StringVisitor.SaveFile(int(argv[0], 16))
+        print("Saved %s" % f)
+
+class cli_heap_find_string_save(Command):
+    _cxpr = 'heap string startswith-save' 
+
+    def invoke(self, argv):
+        if len(argv) != 2:
+            print("heap string startswith-save <space> <start_with_str>")
+
+        StringVisitor.StartsWithSave(argv)
 
 # Tail Imports
 from andb.shadow import (
@@ -162,6 +180,7 @@ from andb.shadow import (
     IsolateGuesser, 
     HeapSnapshot,
     StackVisitor,
+    StringVisitor,
 )
 
 from andb.utility import Logging as log

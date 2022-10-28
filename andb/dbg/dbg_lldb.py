@@ -50,7 +50,7 @@ class Command(intf.Command):
         mod = cls.__module__
         name = cls.__name__
         cmd = "command script add -c %s.%s %s" % (mod, name, cls._cxpr)
-        print(cmd)
+        #print(cmd)
         debugger.HandleCommand(cmd)
 
     def __init__(self, debugger=None, unused=None):
@@ -639,8 +639,8 @@ class Target(intf.Target):
         raise Exception('TBD')
 
     @classmethod
-    def MmeoryRead(cls, address, size):
-        s = process.ReadMemory(ptr, length, cls._error)
+    def MemoryRead(cls, address, size):
+        s = process.ReadMemory(address, size, cls._error)
         cls._error.Clear()
         return bytes(s)
 
@@ -668,5 +668,11 @@ class Target(intf.Target):
             return find
         return None
 
+    @classmethod
+    def MemoryDump(cls, file_to_save, start_address, end_address):
+        size = end_address - start_address
+        data = cls.MemoryRead(start_address, size)
+        with open(file_to_save, 'wb') as f:
+            f.write(data)
 
 print('lldb debugger loaded')

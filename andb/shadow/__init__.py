@@ -6,9 +6,9 @@ from .visitor import (
     HeapVisitor,
     NodeEnvGuesser,
     StackVisitor,
+    StringVisitor,
 )
 
 from .heap_snapshot import (
     HeapSnapshot
 )
-
