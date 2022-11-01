@@ -2,6 +2,7 @@
 from __future__ import print_function, division
 
 import re
+import struct
 
 from functools import wraps
 from andb.utility import Logging as log, oneshot, CachedProperty
@@ -25,6 +26,7 @@ from .enum import (
     InstanceType,
 )
 import andb.py23 as py23
+raw_print=print
 print=log.print
 
 """ v8 Objects
@@ -398,6 +400,12 @@ class HeapObject(Object, Value):
     def IsJSGlobalObject(self):
         return InstanceType.isJSGlobalObject(self.instance_type)
 
+    def IsJSGlobalProxy(self):
+        return InstanceType.isJSGlobalProxy(self.instance_type)
+    
+    def IsJSBoundFunction(self):
+        return InstanceType.isJSBoundFunction(self.instance_type)
+
     def IsSwissNameDictionary(self):
         return InstanceType.isSwissNameDictionary(self.instance_type)
     
@@ -415,6 +423,15 @@ class HeapObject(Object, Value):
 
     def IsContext(self):
         return InstanceType.isContext(self.instance_type)
+    
+    def IsNativeContext(self):
+        return InstanceType.isNativeContext(self.instance_type)
+
+    def IsFixedArray(self):
+        return InstanceType.isFixedArray(self.instance_type)
+
+    def IsFixedDoubleArray(self):
+        return InstanceType.isFixedDoubleArray(self.instance_type)
 
     @CachedProperty
     def has_fast_properties(self):
@@ -442,7 +459,12 @@ class HeapObject(Object, Value):
         try:
             return self._Brief()
         except:
+            pass
+
+        try:
             return "<%s 0x%x>" % (self.instance_type.camel_name, self.tag)
+        except Exception as e:
+            return "brief failed %s." % e
 
     def _Brief(self):
         """intf for all HeapObject should implemented"""
@@ -1035,6 +1057,9 @@ class FixedArrayBase(HeapObject):
         """
         return Object(self.LoadPtr(self.kHeaderSize + (index * Internal.kTaggedSize)))
 
+    def GetDouble(self, index):
+        return (self.LoadPtr(self.kHeaderSize + (index * Internal.kTaggedSize)))
+
     def OffsetElementAt(self, index):
         """ get offset of a element
         """
@@ -1133,6 +1158,14 @@ class FixedDoubleArray(FixedArrayBase):
     def SizeFor(self, length):
         return self.kHeaderSize + (length * Internal.kDoubleSize)
 
+    def GetDouble(self, index):
+        off = self.kHeaderSize + (index * Internal.kTaggedSize)
+        return self.LoadDouble(off) 
+
+    def WalkElements(self):
+        for i in range(self.length):
+            v = self.GetDouble(i)
+            yield (i, v)
 
 class WeakFixedArray(FixedArrayBase):
 
@@ -2134,6 +2167,23 @@ class ContextSlot(Enum):
     MIN_CONTEXT_SLOTS = 2
     EMBEDDER_DATA_INDEX = 4
 
+    # native context link
+    NEXT_CONTEXT_LINK = 0
+
+    # last 
+    NATIVE_CONTEXT_SLOTS = 0
+
+    @classmethod
+    def Slots(cls):
+        assert cls.NATIVE_CONTEXT_SLOTS > 0
+        return cls.NATIVE_CONTEXT_SLOTS 
+
+    @classmethod
+    def WalkSlots(cls):
+        assert cls.NATIVE_CONTEXT_SLOTS > 0
+        for i in range(cls.NATIVE_CONTEXT_SLOTS):
+            yield cls(i)
+
 class Context(HeapObject):
     _typeName = 'v8::internal::Context'
 
@@ -2145,7 +2195,7 @@ class Context(HeapObject):
     @classmethod
     def __autoLayout(cls):
         return {"layout": [
-            {"name": "length", "type": Smi},
+            {"name": "length", "type": SmiTagged(int)},
             {"name": "scope_info", "type": Object},
             {"name": "previous", "type": Object},
         ]}
@@ -2157,8 +2207,13 @@ class Context(HeapObject):
         return HeapObject(x)
 
     def Get(self, index):
-        off = self.kScopeInfoOffset + (index * Internal.kTaggedSize)
-        return self.LoadTag(off)
+        off = self.kFixedArrayLikeHeaderSize + (index * Internal.kTaggedSize)
+        return self.LoadPtr(off)
+
+    def GetLocal(self, index):
+        index = ContextSlot.MIN_CONTEXT_SLOTS + index
+        off = self.kFixedArrayLikeHeaderSize + ( index * Internal.kTaggedSize)
+        return self.LoadPtr(off)
 
     def SizeFor(self, length):
         return self.kFixedArrayLikeHeaderSize + (int(length) * Internal.kTaggedSize)
@@ -2166,23 +2221,26 @@ class Context(HeapObject):
     def Size(self):
         return self.SizeFor(self.length)
 
-    def DebugPrint2(self):
-        print("[Context]")
-        print(" - length: %d" % (self.length()))
-        print(" - scope_info: %s" % (self.scope_info.Brief()))
-        print(" - previous: %s" % (self.previous.Brief()))
-        print(" - native_context: %s" % (self.native_context.Brief()))
-        if self.length > 0:
-            print(" - context")
-            for i in range(self.length()):
-                print("   - %d: %s [%s]" % (i, self.Get(i).Brief(), Context.Field.CamelName(i)))
+    def WalkAllSlots(self):
+        scope_info = ScopeInfo(self.scope_info)
+        local_count = scope_info.context_local_count
 
+        for i in range(local_count):
+            name = String(scope_info.context_local_names(i)).ToString()
+            o = Object(self.GetLocal(i))
+            yield (name, o)
+
+    def DebugPrint(self):
+        super(Context, self).DebugPrint()
+        print("- Locals: ")
+        for i,v in self.WalkAllSlots():
+            print("  - %s : %s" % (i, v))
 
 class NativeContext(Context):
 
     _typeName = 'v8::internal::NativeContext'
     kSize = 0
-    
+     
     @classmethod
     def __autoLayout(cls):
         return {
@@ -2206,11 +2264,19 @@ class NativeContext(Context):
         o = self.Get(ContextSlot.GLOBAL_PROXY_INDEX)
         return JSGlobalProxy(o)
 
-    def DebugPrint2(self):
-        print("[NativeContext]")
-        print(" - microtask_queue: %s" % (self.microtask_queue.Brief()))
-        super(NativeContext, self).DebugPrint()
+    def GetNextContextLink(self):
+        o = self.Get(ContextSlot.NEXT_CONTEXT_LINK)
+        return NativeContext(o)
 
+    def WalkAllSlots(self):
+        for i in ContextSlot.WalkSlots():
+            v = Object(self.Get(i))
+            yield (i.name, v)
+
+    def DebugPrint(self):
+        print('[NativeContext 0x%x]' % self.tag)
+        for n,v in self.WalkAllSlots():
+            print(" - %s : %s" % (n, v))
 
 class DescriptorArray(HeapObject):
 
@@ -2641,7 +2707,10 @@ class JSObject(JSReceiver):
 
     @CachedProperty
     def elements_array(self):
-        return FixedArray(self.raw_elements)
+        elm = self.raw_elements
+        if elm.IsFixedDoubleArray():
+            return FixedDoubleArray(elm)
+        return FixedArray(elm)
 
     @CachedProperty
     def descriptors_array(self):
@@ -2663,14 +2732,16 @@ class JSObject(JSReceiver):
 
     """ Raw At() functions (without type)
     """
-    def RawInObjectPropertyAt(self, field_index):
+    def RawInObjectPropertyAt(self, field_index, is_double=False):
         """ get inobject value
         """
         assert field_index < self.number_of_inobjects
         array_index = self.kHeaderSize + (field_index * Internal.kTaggedSize)
+        if is_double:
+            return self.LoadDouble(array_index)
         return self.LoadPtr(array_index)
 
-    def RawFastPropertyAt(self, field_index):
+    def RawFastPropertyAt(self, field_index, is_double=False):
         """ get property value by property_index.
         """
         # get field_index from descriptors
@@ -2680,20 +2751,26 @@ class JSObject(JSReceiver):
 
         # get value
         array = self.properties_array
+        if is_double:
+            return array.GetDouble(array_index)
         return array.Get(array_index)
 
     """ Property At Functions
     """
-    def FastPropertyAt(self, property_index):
+    def FastPropertyAt(self, property_index, details=None):
         """ get property at index
         """
-        details = self.descriptors_array.GetDetails(property_index)
+        if details is None:
+            details = self.descriptors_array.GetDetails(property_index)
+        is_double = details.IsDouble()
         field_index = details.field_index
         if self.IsInobject(field_index):
-            value = self.RawInObjectPropertyAt(field_index)
+            value = self.RawInObjectPropertyAt(field_index, is_double)
         else:
-            value = self.RawFastPropertyAt(field_index)
+            value = self.RawFastPropertyAt(field_index, is_double)
         assert value is not None, 'index=%d, <0x%x>' % (field_index, self)
+        if is_double:
+            return value
         return Object(value)
 
     def DictPropertyAt(self, index):
@@ -2714,7 +2791,7 @@ class JSObject(JSReceiver):
                 key = Name(descs.GetKey(i)).ToString()
                 details = descs.GetDetails(i)
                 if details.location == PropertyLocation.kField:
-                    value = self.FastPropertyAt(i)
+                    value = self.FastPropertyAt(i, details)
                 elif details.location == PropertyLocation.kDescriptor:
                     value = descs.GetValue(i)
                 yield (key, details, value)
@@ -2723,6 +2800,7 @@ class JSObject(JSReceiver):
             # JSGlobalObject
             dicts = self.global_dictionary
             for (key, details, value) in dicts.WalkProperties():
+                # TBD: filter out roots
                 yield (key, details, value)
             
         else:
@@ -2798,6 +2876,10 @@ class JSObject(JSReceiver):
         # default class name
         return (None, self.ClassName())
 
+    def GetPrototype(self):
+        it = PrototypeIterator(self)
+        return it.GetCurrent()
+
     def GetConstructorName(self):
         constructor, name = self.GetConstructorTuple()
         return name
@@ -2839,11 +2921,18 @@ class JSObject(JSReceiver):
         if len(properties) > 0:
             print('- Properties:')
             for k,v in properties.items():
-                print(" - %s: %s" % (k, v.Brief()))
+                if isinstance(v, Object):
+                    print(" - %s: %s" % (k, v.Brief()))
+                else:
+                    print(" - %s: %s" % (k, v))
         else:
             print('- Properties: {}')
 
         self.PrintElements()
+
+        constructor, name = self.GetConstructorTuple()
+        print(" - constructor: %s" % constructor)
+        print(" - name: %s" % name)
 
 class JSProxy(JSReceiver):
     _typeName = 'v8::internal::JSProxy'
@@ -2873,7 +2962,8 @@ class JSFunction(JSObject):
         return {"layout":[
             {"name": "shared_function_info", "type": SharedFunctionInfo},
             {"name": "context", "type": Context},
-            {"name": "FeedbackCell", "type": Object},
+            {"name": "feedback_cell", "type": Object},
+            {"name": "code", "type": Code},
             {"name": "prototype_or_initial_map", "type": Object},
         ]}
 
@@ -2890,6 +2980,17 @@ class JSFunction(JSObject):
     def DebugPrint(self):
         super(JSFunction, self).DebugPrint()
 
+class JSBoundFunction(HeapObject):
+    _typeName = 'v8::internal::JSBoundFunction'
+
+    @classmethod
+    def __autoLayout(cls):
+        return {"layout":[
+            {"name": "bound_target_function", "type": Object},
+            {"name": "bound_this", "type": Object},
+            {"name": "bound_arguments", "type": FixedArray},
+        ]}
+ 
 class PreparseData(HeapObject):
     """ store the pre-parser information about scopes and inner functions.
     """
@@ -2944,7 +3045,7 @@ class UncompiledDataWithPreparseData(UncompiledData):
         ]}
 
 
-class SharedFunctionInfo(JSObject):
+class SharedFunctionInfo(HeapObject):
     """ SharedFunctionInfo """
 
     _typeName = 'v8::internal::SharedFunctionInfo'
@@ -3011,6 +3112,13 @@ class SharedFunctionInfo(JSObject):
                 {"name": "flags", "type": SharedFunctionInfo.SharedFunctionInfoFlags},
                 {"name": "function_literal_id", "type": int, "size": 4},
             ]}
+
+    @property
+    def script(self):
+        o = Script(self.script_or_debug_info)
+        if o.IsScript():
+            return o
+        return None 
 
     @CachedProperty
     def uncompiled_data(self):
@@ -3428,6 +3536,37 @@ class PropertyDetails(BitField):
         cfg.Add({"name": "attributes", "bits": 3, "type": PropertyAttributes})
         return cfg.Generate()
 
+    def RepresentationKind(self):
+        return None
+
+    def IsDouble(self):
+        rep = self.RepresentationKind()
+        if rep is None:
+            return False
+        return rep == RepresentationKind.kDouble
+
+
+class PropertyDetailsFastTo(PropertyDetails):
+    """ BitFields for Fast Property details.
+    """
+
+    @classmethod
+    def __autoLayout(cls):
+        cfg = AutoLayout.Builder()
+        # we need's Bits defines in PropertyDetails
+        cfg.Inherit()
+        # for node-v18
+        if Version.major >= 10:
+            cfg.Add({"name": "location", "bits": 1, "type": PropertyLocation, "after": "attributes"})
+            cfg.Add({"name": "representation", "bits": 3, "type": RepresentationKind}),
+        else:
+            cfg.Add({"name": "representation", "bits": 3, "type": RepresentationKind, "after": "attributes"}),
+        cfg.Add({"name": "descriptor_pointer", "bits": Internal.kDescriptorIndexBitCount, "type": int})
+        cfg.Add({"name": "field_index", "bits": Internal.kDescriptorIndexBitCount, "type": int})
+        return cfg.Generate()
+
+    def RepresentationKind(self):
+        return self.representation
 
 class PropertyDetailsSlowTo(PropertyDetails):
     """ BitFields for Slow Property details.
@@ -3468,26 +3607,6 @@ class FieldIndex(BitField):
         ]}
 
 
-class PropertyDetailsFastTo(PropertyDetails):
-    """ BitFields for Fast Property details.
-    """
-
-    @classmethod
-    def __autoLayout(cls):
-        cfg = AutoLayout.Builder()
-        # we need's Bits defines in PropertyDetails
-        cfg.Inherit()
-        # for node-v18
-        if Version.major >= 10:
-            cfg.Add({"name": "location", "bits": 1, "type": PropertyLocation, "after": "attributes"})
-            cfg.Add({"name": "representation", "bits": 3, "type": int}),
-        else:
-            cfg.Add({"name": "representation", "bits": 3, "type": int, "after": "attributes"}),
-        cfg.Add({"name": "descriptor_pointer", "bits": Internal.kDescriptorIndexBitCount, "type": int})
-        cfg.Add({"name": "field_index", "bits": Internal.kDescriptorIndexBitCount, "type": int})
-        return cfg.Generate()
-
-
 class PropertyArray(HeapObject):
 
     _typeName = 'v8::internal::PropertyArray'
@@ -3514,12 +3633,17 @@ class PropertyArray(HeapObject):
     def length(self):
         return self.length_and_hash.length
 
-    def Get(self, index):
+    def _offset(self, index):
         """ return value at index """
         assert index < self.length, "%d < %d, <0x%x>" % (index, self.length, self)
-
         offset = self.kHeaderSize + (index * Internal.kTaggedSize)
-        return self.LoadPtr(offset)
+        return offset
+
+    def Get(self, index):
+        return self.LoadPtr(self._offset(index))
+
+    def GetDouble(self, index):
+        return self.LoadDouble(self._offset(index))
 
     def WalkProperties(self):
         for i in range(self.length):
@@ -3742,7 +3866,8 @@ from .enum import (
     VariableAllocationInfo,
     FunctionKind,
     FunctionSyntaxKind,
-    CodeKind
+    CodeKind,
+    RepresentationKind,
 )
 
 from .struct import (

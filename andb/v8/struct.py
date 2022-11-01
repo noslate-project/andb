@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 """ v8 engine support
 """
-from .internal import Version, Internal, Struct, ObjectSlot
+from .internal import Version, Internal, Struct, ObjectSlot, Enum
 from andb.utility import CachedProperty, Logging as log
 from itertools import chain
 import andb.stl as stl
@@ -873,6 +873,26 @@ class InterpreterData(Struct):
     _typeName = 'v8::internal::InterpreterData'
 
 
+class Representation(Struct):
+    _typeName = 'v8::internal::Representation'
+
+    def __init__(self, kind):
+        self._kind = kind
+
+    def Kind(self):
+        return self._kind
+
+    def IsSmi(self):
+        return self._kind == self.kSmi 
+
+    def IsDouble(self):
+        return self._kind == self.kDouble 
+
+    def IsHeapObject(self):
+        return self._kind == self.kHeapObject 
+
+    def IsTagged(self):
+        return self._kind == self.kTagged
 
 """ tail imports
 """

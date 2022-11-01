@@ -38,6 +38,8 @@ class BasicTypes:
     s32p_t = s32_t.pointer()
     s64p_t = s64_t.pointer()
 
+    p_double = gdb.lookup_type('double').pointer()
+
     """ 
     """
     #char16_t = gdb.lookup_type('char16_t')
@@ -60,7 +62,7 @@ class Command(intf.Command, gdb.Command):
 
     @classmethod
     def Register(cls):
-        pass
+        cls()
 
     def invoke(self, arg, tty):
         child_fn = getattr(self, 'Dispatch')
@@ -103,6 +105,10 @@ class Block(intf.Block):
         #b = inferior.read_memory(self._address + off, 1)
         #return struct.unpack('B', b)[0]
         return int(gdb.Value(self._address + off).cast(BasicTypes.u8p_t).dereference())
+
+    def LoadDouble(self, off):
+        address = self._address + off
+        return Target.ReadDouble(address)
 
     """ String function. 
     """
@@ -268,6 +274,10 @@ class Value(intf.Value):
     def LoadS64(self, off):
         return self.LoadIntValue(off, BasicTypes.s64p_t)
 
+    def LoadDouble(self, off):
+        address = self.address + off
+        return TarGet.ReadDouble(address)
+    
     """ magic methods
     """
     def __eq__(self, other):
@@ -695,6 +705,11 @@ class Target(intf.Target):
             return find
         return None
 
+    @classmethod
+    def ReadDouble(cls, address):
+        t = BasicTypes.p_double 
+        v = gdb.Value(address).cast(t).dereference()
+        return v
 
     @classmethod
     def LookupSymbol(cls, symbol_name):

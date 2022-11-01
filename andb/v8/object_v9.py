@@ -130,7 +130,7 @@ class ScopeInfo(HeapObject):
         return {"layout": [
             {"name": "flags", "type": SmiTagged(ScopeFlags)},
             {"name": "parameter_count", "type": Smi},
-            {"name": "context_local_count", "type": Smi},
+            {"name": "context_local_count", "type": SmiTagged(int)},
             {"name": "context_local_names[context_local_count]", "type": String},
             {"name": "context_local_infos[context_local_count]", "type": SmiTagged(VariableProperties)},
             {"name": "saved_class_variable_info?[has_saved_class_variable_index]", "type":  Smi},

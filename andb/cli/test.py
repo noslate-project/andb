@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 from andb.dbg import Command, CommandPrefix, Target, Value, Type
 from andb.ptmalloc import ArenaVisitor
-from andb.shadow import ObjectVisitor
+from andb.shadow import ObjectVisitor, TestVisitor
 
 """ test commands
 """
@@ -39,6 +39,12 @@ class cli_test_find_double_in_range(Command):
                     c, = struct.unpack_from('d', b, offset)
                     if c > t1 and c < t2:
                         print("0x%x:" % p, c)
+
+class cli_test_find_function_context_scripts(Command):
+    _cxpr = "test function_context_script"
+
+    def invoke(self, argv):
+        TestVisitor.FunctionContextScripts(argv)
 
 class cli_mm(CommandPrefix):
     _cxpr = "mm"

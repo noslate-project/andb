@@ -665,7 +665,7 @@ class Frame:
 
         position = ""
         filename, fileline = self.GetPosition()
-        if filename:
+        if filename and fileline:
             position = "at %s:%d" % (filename, fileline)
 
         if not full:
