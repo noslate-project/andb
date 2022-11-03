@@ -46,6 +46,13 @@ class cli_test_find_function_context_scripts(Command):
     def invoke(self, argv):
         TestVisitor.FunctionContextScripts(argv)
 
+
+class cli_test_find_function(Command):
+    _cxpr = "test function"
+
+    def invoke(self, argv):
+        TestVisitor.FindFunction(argv)
+
 class cli_mm(CommandPrefix):
     _cxpr = "mm"
 

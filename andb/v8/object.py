@@ -433,6 +433,18 @@ class HeapObject(Object, Value):
     def IsFixedDoubleArray(self):
         return InstanceType.isFixedDoubleArray(self.instance_type)
 
+    def IsOddball(self):
+        return InstanceType.isOddball(self.instance_type)
+
+    def IsTheHole(self):
+        if not self.IsOddball():
+            return False
+        o = Oddball(self.address) 
+        return o.IsTheHole()
+
+    def IsMap(self):
+        return InstanceType.isMap(self.instance_type)
+
     @CachedProperty
     def has_fast_properties(self):
         """ return true if may have fast properties """
@@ -878,6 +890,10 @@ class Map(HeapObject):
     @CachedProperty
     def is_access_check_needed(self):
         return self.bit_field.is_access_check_needed
+
+    @CachedProperty
+    def has_non_instance_prototype(self):
+        return self.bit_field.has_non_instance_prototype
 
     @CachedProperty
     def inobject_properties_start(self):
@@ -2977,6 +2993,14 @@ class JSFunction(JSObject):
             return ''
         return name
 
+    @property
+    def prototype(self):
+        m = self.map
+        # non-JSReceiver prototype stores in map's constructor
+        if m.has_non_instance_prototype:
+            return Object(m.constructor)
+        return self.prototype_or_initial_map
+
     def DebugPrint(self):
         super(JSFunction, self).DebugPrint()
 
@@ -3149,6 +3173,26 @@ class SharedFunctionInfo(HeapObject):
         else:
             raise Exception('unknown function type.')
         return None 
+
+    def Name(self):
+        v = HeapObject(self.name_or_scope_info)
+        if not v.IsHeapObject():
+            return None 
+        t = v.map.instance_type
+        if InstanceType.isString(t):
+            return String(v).to_string()
+        elif InstanceType.isScopeInfo(t):
+            o = ScopeInfo(v)
+            return o.Name()
+        else:
+            raise Exception('unknown function type.')
+        return None 
+
+    def NameStr(self):
+        v = self.Name()
+        if v is None:
+            return ""
+        return v
 
     def DebugName(self):
         """ return blank string if not decoded. """

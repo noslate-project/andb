@@ -476,7 +476,12 @@ class HeapSnapshot:
 
         if v8.InstanceType.isJSFunction(obj_type):
             o = v8.JSFunction(obj)
-            name = o.FunctionNameStr()
+            shared = o.shared_function_info
+            script = shared.script
+            if script is not None:
+                name = "%s %s" % (shared.NameStr(), script.name)
+            else:
+                name = shared.NameStr()
             return self.AddEntryObjectSize(heap_obj, HeapEntry.kClosure, name)
 
         elif v8.InstanceType.isJSBoundFunction(obj_type):
@@ -661,11 +666,22 @@ class HeapSnapshot:
 
         # TBD: treat global objects as roots
 
-    def IsSessentialObject(self, tag):
+    def IsSessentialObject(self, obj):
         """ heapobject, not oddball, not roots.
         """
-        if not v8.HeapObject.IsValid(tag):
-            return False
+        if not obj.IsHeapObject(): return False
+        if obj.IsOddball(): return False
+        if obj == v8.RootsTable.empty_byte_array: return False
+        if obj == v8.RootsTable.empty_fixed_array: return False
+        if obj == v8.RootsTable.empty_weak_fixed_array: return False
+        if obj == v8.RootsTable.empty_descriptor_array: return False
+        if obj == v8.RootsTable.fixed_array_map: return False
+        if obj == v8.RootsTable.cell_map: return False
+        if obj == v8.RootsTable.global_property_cell_map: return False
+        if obj == v8.RootsTable.shared_function_info_map: return False
+        if obj == v8.RootsTable.free_space_map: return False
+        if obj == v8.RootsTable.one_pointer_filler_map: return False
+        if obj == v8.RootsTable.two_pointer_filler_map: return False
         return True
 
     def SetReferenceValue(self, typ, parent_entry, name_or_index, child_tag):
@@ -691,6 +707,9 @@ class HeapSnapshot:
 
         child_entry = self.GetEntry(child_obj)
         assert child_entry is not None, child_obj
+
+        if not self.IsSessentialObject(child_obj):
+            return
 
         # based on typeof(name_or_index)
         if isinstance(name_or_index, int):
@@ -917,11 +936,18 @@ class HeapSnapshot:
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "context", js_fun.context)
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "code", js_fun.code)
 
+            proto_or_map = v8.HeapObject(js_fun.prototype_or_initial_map)
+            if not proto_or_map.IsTheHole():
+                if proto_or_map.IsMap():
+                    self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", v8.HeapObject(js_fun.prototype))
+                    self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "initial_map", proto_or_map)
+                else:
+                    self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", proto_or_map)
+
         elif o.IsJSGlobalObject():
             glob = v8.JSGlobalObject(obj.address)
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "native_context", v8.HeapObject(glob.native_context))
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "global_proxy", v8.HeapObject(glob.global_proxy))
-            print(glob)
 
         # maybe hash
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, 'properties', v8.HeapObject(o.raw_properties))
@@ -947,21 +973,53 @@ class HeapSnapshot:
         if v8.InstanceType.isJSGlobalProxy(typ):
             self.ExtractReferencesJSGlobalProxy(entry, obj)
 
+        # TBD: JSArrayBuffer
+
         elif v8.InstanceType.isJSObject(typ):
+            # TBD: JSWeakSet, JSSet, JSMap, JSPromise, JSGeneratorObject
             self.ExtractReferencesJSObject(entry, obj)
         
         elif v8.InstanceType.isString(typ):
             self.ExtractReferencesString(entry, obj)
 
-        elif v8.InstanceType.isScript(typ):
-            self.ExtractReferencesScript(entry, obj)
+        # TBD: Symbol
+        
+        # TBD: Map
 
         elif v8.InstanceType.isSharedFunctionInfo(typ):
             self.ExtractReferencesSharedFunctionInfo(entry, obj)
 
+        elif v8.InstanceType.isScript(typ):
+            self.ExtractReferencesScript(entry, obj)
+
+        # TBD: AccessorInfo
+
+        # TBD: AccessorPair 
+
+        # TBD: Code
+
+        # TBD: Cell
+
+        # TBD: FeedbackCell
+
+        # TBD: PropertyCell
+
+        # TBD: AllocationSite
+
+        # TBD: FeedbackVector
+
+        # TBD: DescriptorArray
+
+        # TBD: WeakFixedArray
+
+        # TBD: WeakArrayList
+
         elif v8.InstanceType.isContext(typ):
             self.ExtractReferncesContext(entry, obj)
 
+        # TBD: EphemronHashTable
+
+        # TBD: FixedArray
 
     def ExtractLocation(self, entry, obj):
         if obj.IsJSFunction():
@@ -972,6 +1030,8 @@ class HeapSnapshot:
 
             script_id = int(script.id)
             self.AddLocation(entry, script_id, 0, 0)
+
+        # TBD: JSObject Constructor
 
     def AddSyntheticRootEntries(self):
         """ Add all Synthetic Root Entries 

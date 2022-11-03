@@ -228,6 +228,19 @@ class ScopeInfo(HeapObject):
             return ''
         return v 
 
+    def Name(self):
+        if self.has_function_variable_info:
+            o = String.Bind(self.function_variable_info.name)
+            if o and o.IsString() and o.length > 0:
+                return o.ToString()
+        return None
+    
+    def NameStr(self):
+        v = self.Name()
+        if v is None:
+            return ""
+        return v
+
     def Size(self):
         return self.AllocateSize()
 

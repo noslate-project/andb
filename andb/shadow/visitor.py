@@ -645,4 +645,11 @@ class TestVisitor(object):
         for i in (sorted(tbl.items(), key = lambda v:(v[1], v[0]), reverse = False)):
             print("%s : %d" % (i[0], i[1]))
 
+    @classmethod
+    def FindFunction(cls, argv):
+        iso = v8.Isolate.GetCurrent()
+        heap = iso.Heap()
+        space = heap.getSpace('old')
+        
+
 

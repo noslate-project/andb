@@ -682,6 +682,60 @@ class RootsTable(Struct):
         ptr = self['roots_'][Internals.kNullValueRootIndex]
         return Oddball(int(ptr))
 
+    @CachedProperty
+    def empty_byte_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyByteArray]
+        return Object(ptr)
+
+    @CachedProperty
+    def empty_fixed_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyFixedArray]
+        return Object(ptr)
+
+    @CachedProperty
+    def empty_weak_fixed_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyWeakFixedArray]
+        return Object(ptr)
+
+    @CachedProperty
+    def empty_descriptor_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyDescriptrArray]
+        return Object(ptr)
+
+    @CachedProperty
+    def fixed_array_map(self):
+        ptr = self['roots_'][RootIndex.kFixedArrayMap]
+        return Object(ptr)
+
+    @CachedProperty
+    def cell_map(self):
+        ptr = self['roots_'][RootIndex.kCellMap]
+        return Object(ptr)
+
+    @CachedProperty
+    def global_property_cell_map(self):
+        ptr = self['roots_'][RootIndex.kGlobalPropertyCellMap]
+        return Object(ptr)
+    
+    @CachedProperty
+    def shared_function_info_map(self):
+        ptr = self['roots_'][RootIndex.kSharedFunctionInfoMap]
+        return Object(ptr)
+
+    @CachedProperty
+    def free_space_map(self):
+        ptr = self['roots_'][RootIndex.kFreeSpaceMap]
+        return Object(ptr)
+
+    @CachedProperty
+    def one_pointer_filler_map(self):
+        ptr = self['roots_'][RootIndex.kOnePointerFillerMap]
+        return Object(ptr)
+
+    @CachedProperty
+    def two_pointer_filler_map(self):
+        ptr = self['roots_'][RootIndex.kTwoPointerFillerMap]
+        return Object(ptr)
 
 class Space(Struct):
     _typeName = 'v8::internal::Space'
