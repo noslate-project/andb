@@ -38,7 +38,7 @@ class BasicTypes:
     s64p_t = s64_t.GetPointerType()
 
     double_t = target.FindFirstType('double')
-    p_double_t = double_t.GetPointerType() 
+    p_double = double_t.GetPointerType() 
 
     @classmethod
     def GetType(cls, typ):
@@ -685,5 +685,11 @@ class Target(intf.Target):
         data = cls.MemoryRead(start_address, size)
         with open(file_to_save, 'wb') as f:
             f.write(data)
+
+    @classmethod
+    def ReadDouble(cls, address):
+        data = cls.MemoryRead(address, 8)
+        a = struct.unpack('d', data) 
+        return a[0]
 
 print('lldb debugger loaded')

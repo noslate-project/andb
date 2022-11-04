@@ -864,3 +864,8 @@ class Target:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def ReadDouble(cls, address):
+        """ Read double (float) from memory.
+        """
+        raise NotImplementedError()
