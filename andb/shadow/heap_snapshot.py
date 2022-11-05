@@ -735,12 +735,26 @@ class HeapSnapshot:
        
         parent_entry.SetIndexedReference(typ, name_or_index, child_entry)
 
-    def ExtractReferencesMap(self, parent_entry, parent_obj):
+    def ExtractReferencesAccessorInfo(self, parent_entry, obj):
+        o = v8.AccessorInfo(obj)
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "name", v8.HeapObject(o.name))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "data", v8.HeapObject(o.data))
+
+    def ExtractReferencesAccessorPair(self, parent_entry, obj):
+        o = v8.AccessorPair(obj)
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
+
+    def ExtractReferencesMap(self, parent_entry, obj):
         # transitions
         # isWeak
-        m = v8.Map(parent_obj)
+        m = v8.Map(obj)
+        assert m.IsMap()
         typ = m.instance_type
-        field = m.transitions_or_prototype_info
+        field = v8.HeapObject(m.transitions_or_prototype_info)
         if field.IsHeapObject() and field.IsWeak():
             # is a weak HeapObject
             self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "transition", field)
@@ -749,52 +763,51 @@ class HeapSnapshot:
             if v8.InstanceType.isTransitionArray(typ):
                 # TransitionArray
                 # TBD: Tag (prototype transitions)
-                self.TagObject(field, "(transition array)")
+                #self.TagObject(field, "(transition array)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "transitions", field)
 
             elif v8.InstanceType.isFixedArray(typ):
                 # FixedArray
-                self.TagObject(field, "(transition)")
+                #self.TagObject(field, "(transition)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "transition", field)
 
             elif m.is_prototype_map:
                 # prototype_info
-                self.TagObject(field, "prototype_info")
+                #self.TagObject(field, "prototype_info")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype_info", field)
 
         # descriptors 
-        descriptors = m.instance_descriptors
-        self.TagObject(descriptors, "(map descriptors)")
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "descriptors", descriptors)
+        #self.TagObject(descriptors, "(map descriptors)")
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "descriptors", v8.HeapObject(m.instance_descriptors))
 
         # prototype
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype", m.prototype)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype", v8.HeapObject(m.prototype))
 
         # context, back pointer, constructor
-        field = m.native_context
+        field = v8.HeapObject(m.native_context)
         if v8.InstanceType.isNativeContext(typ):
-            self.TagObject(field, "(native context)")
+            #self.TagObject(field, "(native context)")
             self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "native_context", field)
         else:
             typ = v8.HeapObject(field).instance_type
             if v8.InstanceType.isMap(typ):
-                self.TagObject(field, "(back pointer)")
+                #self.TagObject(field, "(back pointer)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "back_pointer", field)
 
             elif v8.InstanceType.isFunctionTemplateInfo(typ):
-                self.TagObject(field, "(constructor function data)")
+                #self.TagObject(field, "(constructor function data)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "constructor_function_data", field)
 
             else:
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "constructor", field)
 
         # dependent_code
-        field = m.dependent_code
-        self.TagObject(field, "(dependent_code")
+        field = v8.HeapObject(m.dependent_code)
+        #self.TagObject(field, "(dependent_code")
         self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "dependent_code", field)
 
-    def ExtractReferencesDescriptorArray(self, parent_entry, parent_obj):
-        o = v8.DescriptorArray(parent_obj.address)
+    def ExtractReferencesDescriptorArray(self, parent_entry, obj):
+        o = v8.DescriptorArray(obj.address)
 
         self.SetReferenceValue(HeapGraphEdge.kInternal, parent_entry, "enum_cache", o.enum_cache)
         cnt = o.number_of_descriptors
@@ -851,7 +864,7 @@ class HeapSnapshot:
 
     def ExtractReferencesSymbol(self, entry, obj):
         o = v8.Symbol(obj.address)
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.name))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.description))
 
     def ExtractReferencesCell(self, entry, obj):
         o = v8.Cell(obj.address)
@@ -968,6 +981,8 @@ class HeapSnapshot:
         #log.debug("ExtractReferences : 0x%x"% (obj.address))
 
         typ = obj.instance_type
+        #print("<0x%x> %s" % (obj, v8.InstanceType(typ).name))
+
         """ only for debugging
         """
         if v8.InstanceType.isJSGlobalProxy(typ):
@@ -982,9 +997,11 @@ class HeapSnapshot:
         elif v8.InstanceType.isString(typ):
             self.ExtractReferencesString(entry, obj)
 
-        # TBD: Symbol
+        elif v8.InstanceType.isSymbol(typ):
+            self.ExtractReferencesSymbol(entry, obj)
         
-        # TBD: Map
+        elif v8.InstanceType.isMap(typ):
+            self.ExtractReferencesMap(entry, obj)
 
         elif v8.InstanceType.isSharedFunctionInfo(typ):
             self.ExtractReferencesSharedFunctionInfo(entry, obj)
@@ -992,9 +1009,11 @@ class HeapSnapshot:
         elif v8.InstanceType.isScript(typ):
             self.ExtractReferencesScript(entry, obj)
 
-        # TBD: AccessorInfo
+        elif v8.InstanceType.isAccessorInfo(typ):
+            self.ExtractReferencesAccessorInfo(entry, obj)
 
-        # TBD: AccessorPair 
+        elif v8.InstanceType.isAccessorPair(typ):
+            self.ExtractReferencesAccessorPair(entry, obj)
 
         # TBD: Code
 

@@ -443,7 +443,8 @@ class HeapObject(Object, Value):
         return o.IsTheHole()
 
     def IsMap(self):
-        return InstanceType.isMap(self.instance_type)
+        # Map Object has instance_type property, get from map's instance_type
+        return InstanceType.isMap(self.map.instance_type)
 
     @CachedProperty
     def has_fast_properties(self):
@@ -3734,6 +3735,49 @@ class PrototypeInfo(HeapObject):
     _typeName = 'v8::internal::PrototypeInfo'
 
 
+class AccessorPair(HeapObject):
+    _typeName = 'v8::internal::AccessorPair'
+
+    @classmethod
+    def __autoLayout(cls):
+        return {"layout": [
+            {"name": "getter", "type": Object}, 
+            {"name": "setter", "type": Object}, 
+        ]}
+
+
+class AccessInfoFlags(BitField):
+    
+    @classmethod
+    def __autoLayout(cls):
+        return {"layout": [
+            {"name": "all_can_read", "bits": 1}, 
+            {"name": "all_can_write", "bits": 1}, 
+            {"name": "is_special_data_property", "bits": 1}, 
+            {"name": "is_sloppy", "bits": 1}, 
+            {"name": "replace_on_access", "bits": 1}, 
+            {"name": "getter_side_effect_type", "bits": 2}, 
+            {"name": "setter_side_effect_type", "bits": 2}, 
+            {"name": "initial_attributes", "bits": 3}, 
+        ]}
+
+
+class AccessorInfo(HeapObject):
+    _typeName = 'v8::internal::AccessorInfo'
+
+    @classmethod
+    def __autoLayout(cls):
+        return {"layout": [
+            {"name": "name", "type": Name}, 
+            {"name": "flags", "type": SmiTagged(AccessInfoFlags)}, 
+            {"name": "expected_receiver_type", "type": Object}, 
+            {"name": "setter", "type": Object}, 
+            {"name": "getter", "type": Object}, 
+            {"name": "js_getter", "type": Object}, 
+            {"name": "data", "type": Object}, 
+        ]}
+
+
 """ New Objects
 """
 
@@ -3805,6 +3849,8 @@ class ObjectMap:
                 {'name': 'UNCOMPILED_DATA_WITHOUT_PREPARSE_DATA_TYPE', 'type': UncompiledDataWithoutPreparseData},
                 {'name': 'UNCOMPILED_DATA_WITH_PREPARSE_DATA_TYPE', 'type': UncompiledDataWithPreparseData},
 
+                # Misc
+
                 # STRUCT_LIST_GENERATOR
                 {'name': 'DESCRIPTOR_ARRAY_TYPE', 'type': DescriptorArray},
                 {'name': 'FEEDBACK_METADATA_TYPE', 'type': FeedbackMetadata},
@@ -3815,6 +3861,8 @@ class ObjectMap:
                 {'name': 'SCOPE_INFO_TYPE', 'type': ScopeInfo},
                 {'name': 'PROMISE_REJECT_REACTION_JOB_TASK_TYPE', 'type': PromiseRejectReactionJobTask},
                 {'name': 'PROMISE_FULFILL_REACTION_JOB_TASK_TYPE', 'type': PromiseFulfillReactionJobTask},
+                {'name': 'ACCESSOR_INFO_TYPE', 'type': AccessorInfo},
+                {'name': 'ACCESSOR_PAIR_TYPE', 'type': AccessorPair},
 
                 # Inner  
                 {'name': 'SHARED_FUNCTION_INFO_TYPE', 'type': SharedFunctionInfo},

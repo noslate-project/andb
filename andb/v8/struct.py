@@ -948,6 +948,7 @@ class Representation(Struct):
     def IsTagged(self):
         return self._kind == self.kTagged
 
+
 """ tail imports
 """
 from .enum import (
