@@ -848,14 +848,7 @@ class HeapSnapshot:
         length = o.length
         for i in range(length):
             tag = o.Get(i)
-            if not v8.HeapObject.IsValid(tag):
-                continue
-
-            p = v8.HeapObject(tag)
-            #if not p.isHeapObject():
-            #    continue
-            #print("FixedArray[%d]: 0x%x"%(i, p.tag()))
-            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, i, p)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "%d" % i, v8.HeapObject(tag))
 
     def ExtractReferencesPropertyCell(self, entry, obj):
         o = v8.PropertyCell(obj.address)
@@ -1039,6 +1032,8 @@ class HeapSnapshot:
         # TBD: EphemronHashTable
 
         # TBD: FixedArray
+        elif v8.InstanceType.isFixedArray(typ):
+            self.ExtractReferencesFixedArray(entry, obj)
 
     def ExtractLocation(self, entry, obj):
         if obj.IsJSFunction():
