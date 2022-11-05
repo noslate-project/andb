@@ -281,7 +281,12 @@ class HeapSnapshot:
     kObjectIdStep = 2
 
     def __init__(self):
-        
+       
+        self._isolate = v8.Isolate.GetCurrent()
+        if self._isolate is None:
+            print("isolate is not set.")
+            raise Exception
+ 
         #self._size = 0
         #self._cnt = 0
 
@@ -344,20 +349,13 @@ class HeapSnapshot:
         """ return the GC_ROOT by index """
         return self.gc_subroot_entries_[index]
 
-    def isolate(self):
-        self._isolate = v8.Isolate.GetCurrent()
-        if self._isolate is None:
-            print("isolate is not set.")
-            raise Exception
-        return self._isolate
-
     def heap(self):
         """ return the Heap object(py) """
-        return self.isolate().Heap()
+        return self._isolate.Heap()
 
     def initRootNames(self):
         """ init the root name table """
-        root_index = self.isolate().Roots()
+        root_index = self._isolate.Roots()
         for i in range(v8.RootIndex.kFirstStrongOrReadOnlyRoot, v8.RootIndex.kLastStrongOrReadOnlyRoot):
             ptr = int(root_index.root(i))
             name = root_index.Name(i)
@@ -671,17 +669,19 @@ class HeapSnapshot:
         """
         if not obj.IsHeapObject(): return False
         if obj.IsOddball(): return False
-        if obj == v8.RootsTable.empty_byte_array: return False
-        if obj == v8.RootsTable.empty_fixed_array: return False
-        if obj == v8.RootsTable.empty_weak_fixed_array: return False
-        if obj == v8.RootsTable.empty_descriptor_array: return False
-        if obj == v8.RootsTable.fixed_array_map: return False
-        if obj == v8.RootsTable.cell_map: return False
-        if obj == v8.RootsTable.global_property_cell_map: return False
-        if obj == v8.RootsTable.shared_function_info_map: return False
-        if obj == v8.RootsTable.free_space_map: return False
-        if obj == v8.RootsTable.one_pointer_filler_map: return False
-        if obj == v8.RootsTable.two_pointer_filler_map: return False
+        roots = self._isolate.Roots()
+        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
+        if obj == roots.empty_byte_array: return False
+        if obj == roots.empty_fixed_array: return False
+        if obj == roots.empty_weak_fixed_array: return False
+        if obj == roots.empty_descriptor_array: return False
+        if obj == roots.fixed_array_map: return False
+        if obj == roots.cell_map: return False
+        if obj == roots.global_property_cell_map: return False
+        if obj == roots.shared_function_info_map: return False
+        if obj == roots.free_space_map: return False
+        if obj == roots.one_pointer_filler_map: return False
+        if obj == roots.two_pointer_filler_map: return False
         return True
 
     def SetReferenceValue(self, typ, parent_entry, name_or_index, child_tag):
@@ -1169,7 +1169,7 @@ class HeapSnapshot:
 
     def IterateROHeapObjects(self):
         cnt = 0
-        ro_heap = self.isolate().ReadOnlyHeap()
+        ro_heap = self._isolate.ReadOnlyHeap()
         failed = []
         for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
             self.ParseObject(obj)

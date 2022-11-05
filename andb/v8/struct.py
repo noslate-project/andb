@@ -109,9 +109,13 @@ class Isolate(Struct):
     def ReadOnlyHeap(self):
         return ReadOnlyHeap(self['read_only_heap_'], self)
 
-    def Roots(self):
+    @CachedProperty
+    def _roots_table(self):
         v = self['isolate_data_']['roots_'].AddressOf()
         return RootsTable(v, self)
+
+    def Roots(self):
+        return self._roots_table
 
     def GlobalHandles(self):
         return GlobalHandles(self['global_handles_'], self)
@@ -685,57 +689,57 @@ class RootsTable(Struct):
     @CachedProperty
     def empty_byte_array(self):
         ptr = self['roots_'][RootIndex.kEmptyByteArray]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def empty_fixed_array(self):
         ptr = self['roots_'][RootIndex.kEmptyFixedArray]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def empty_weak_fixed_array(self):
         ptr = self['roots_'][RootIndex.kEmptyWeakFixedArray]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def empty_descriptor_array(self):
-        ptr = self['roots_'][RootIndex.kEmptyDescriptrArray]
-        return Object(ptr)
+        ptr = self['roots_'][RootIndex.kEmptyDescriptorArray]
+        return Object(int(ptr))
 
     @CachedProperty
     def fixed_array_map(self):
         ptr = self['roots_'][RootIndex.kFixedArrayMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def cell_map(self):
         ptr = self['roots_'][RootIndex.kCellMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def global_property_cell_map(self):
         ptr = self['roots_'][RootIndex.kGlobalPropertyCellMap]
-        return Object(ptr)
+        return Object(int(ptr))
     
     @CachedProperty
     def shared_function_info_map(self):
         ptr = self['roots_'][RootIndex.kSharedFunctionInfoMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def free_space_map(self):
         ptr = self['roots_'][RootIndex.kFreeSpaceMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def one_pointer_filler_map(self):
         ptr = self['roots_'][RootIndex.kOnePointerFillerMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
     @CachedProperty
     def two_pointer_filler_map(self):
         ptr = self['roots_'][RootIndex.kTwoPointerFillerMap]
-        return Object(ptr)
+        return Object(int(ptr))
 
 class Space(Struct):
     _typeName = 'v8::internal::Space'
@@ -972,6 +976,7 @@ from .enum import (
 )
 
 from .object import (
+    Object,
     HeapObject, 
     Oddball,
     NativeContext,
