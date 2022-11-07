@@ -130,7 +130,7 @@ class ScopeInfo(HeapObject):
         return {"layout": [
             {"name": "flags", "type": SmiTagged(ScopeFlags)},
             {"name": "parameter_count", "type": Smi},
-            {"name": "context_local_count", "type": Smi},
+            {"name": "context_local_count", "type": SmiTagged(int)},
             {"name": "context_local_names[context_local_count]", "type": String},
             {"name": "context_local_infos[context_local_count]", "type": SmiTagged(VariableProperties)},
             {"name": "saved_class_variable_info?[has_saved_class_variable_index]", "type":  Smi},
@@ -227,6 +227,19 @@ class ScopeInfo(HeapObject):
         if v is None:
             return ''
         return v 
+
+    def Name(self):
+        if self.has_function_variable_info:
+            o = String.Bind(self.function_variable_info.name)
+            if o and o.IsString() and o.length > 0:
+                return o.ToString()
+        return None
+    
+    def NameStr(self):
+        v = self.Name()
+        if v is None:
+            return ""
+        return v
 
     def Size(self):
         return self.AllocateSize()

@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 """ v8 engine support
 """
-from .internal import Version, Internal, Struct, ObjectSlot
+from .internal import Version, Internal, Struct, ObjectSlot, Enum
 from andb.utility import CachedProperty, Logging as log
 from itertools import chain
 import andb.stl as stl
@@ -109,9 +109,13 @@ class Isolate(Struct):
     def ReadOnlyHeap(self):
         return ReadOnlyHeap(self['read_only_heap_'], self)
 
-    def Roots(self):
+    @CachedProperty
+    def _roots_table(self):
         v = self['isolate_data_']['roots_'].AddressOf()
         return RootsTable(v, self)
+
+    def Roots(self):
+        return self._roots_table
 
     def GlobalHandles(self):
         return GlobalHandles(self['global_handles_'], self)
@@ -682,6 +686,60 @@ class RootsTable(Struct):
         ptr = self['roots_'][Internals.kNullValueRootIndex]
         return Oddball(int(ptr))
 
+    @CachedProperty
+    def empty_byte_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyByteArray]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def empty_fixed_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyFixedArray]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def empty_weak_fixed_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyWeakFixedArray]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def empty_descriptor_array(self):
+        ptr = self['roots_'][RootIndex.kEmptyDescriptorArray]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def fixed_array_map(self):
+        ptr = self['roots_'][RootIndex.kFixedArrayMap]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def cell_map(self):
+        ptr = self['roots_'][RootIndex.kCellMap]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def global_property_cell_map(self):
+        ptr = self['roots_'][RootIndex.kGlobalPropertyCellMap]
+        return Object(int(ptr))
+    
+    @CachedProperty
+    def shared_function_info_map(self):
+        ptr = self['roots_'][RootIndex.kSharedFunctionInfoMap]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def free_space_map(self):
+        ptr = self['roots_'][RootIndex.kFreeSpaceMap]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def one_pointer_filler_map(self):
+        ptr = self['roots_'][RootIndex.kOnePointerFillerMap]
+        return Object(int(ptr))
+
+    @CachedProperty
+    def two_pointer_filler_map(self):
+        ptr = self['roots_'][RootIndex.kTwoPointerFillerMap]
+        return Object(int(ptr))
 
 class Space(Struct):
     _typeName = 'v8::internal::Space'
@@ -873,6 +931,27 @@ class InterpreterData(Struct):
     _typeName = 'v8::internal::InterpreterData'
 
 
+class Representation(Struct):
+    _typeName = 'v8::internal::Representation'
+
+    def __init__(self, kind):
+        self._kind = kind
+
+    def Kind(self):
+        return self._kind
+
+    def IsSmi(self):
+        return self._kind == self.kSmi 
+
+    def IsDouble(self):
+        return self._kind == self.kDouble 
+
+    def IsHeapObject(self):
+        return self._kind == self.kHeapObject 
+
+    def IsTagged(self):
+        return self._kind == self.kTagged
+
 
 """ tail imports
 """
@@ -897,6 +976,7 @@ from .enum import (
 )
 
 from .object import (
+    Object,
     HeapObject, 
     Oddball,
     NativeContext,

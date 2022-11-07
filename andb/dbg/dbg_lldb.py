@@ -4,6 +4,7 @@ from __future__ import print_function
 import lldb
 from . import intf_dbg as intf
 import andb.py23 as py23
+import struct
 
 debugger = lldb.debugger
 target = debugger.GetSelectedTarget()
@@ -35,6 +36,9 @@ class BasicTypes:
     s16p_t = s16_t.GetPointerType()
     s32p_t = s32_t.GetPointerType()
     s64p_t = s64_t.GetPointerType()
+
+    double_t = target.FindFirstType('double')
+    p_double = double_t.GetPointerType() 
 
     @classmethod
     def GetType(cls, typ):
@@ -101,6 +105,10 @@ class Block(intf.Block):
         error = lldb.SBError()
         return process.ReadUnsignedFromMemory(self._address + off, 1, error)
 
+    def LoadDouble(self, off):
+        address = self.address + off
+        return Target.ReadDouble(address)
+
     """ String
     """ 
     def GetCString(self):
@@ -113,7 +121,6 @@ class Block(intf.Block):
     def LoadUString(self, off, length = -1):
         address = self.address + off
         return Target.ReadUStr(address, length)
-
 
 
 class Value(intf.Value):
@@ -289,6 +296,10 @@ class Value(intf.Value):
    
     def LoadS64(self, off):
         return self.LoadIntValue(off, 8, is_signed=True)
+
+    def LoadDouble(self, off):
+        addr = self.address + off
+        return Target.ReadDouble(addr)
 
     def __int__(self):
         """ return int of the Value (address)
@@ -674,5 +685,11 @@ class Target(intf.Target):
         data = cls.MemoryRead(start_address, size)
         with open(file_to_save, 'wb') as f:
             f.write(data)
+
+    @classmethod
+    def ReadDouble(cls, address):
+        data = cls.MemoryRead(address, 8)
+        a = struct.unpack('d', data) 
+        return a[0]
 
 print('lldb debugger loaded')

@@ -199,6 +199,15 @@ class HeapEntry(object):
             return type_strings[root_type]
         return "???"
 
+class SourceLocation(object):
+    __slots__ = ["_entry", "_id", "_line", "_col"]
+
+    def __init__(self, entry, script_id, line, col):
+        self._entry = entry 
+        self._id = script_id
+        self._line = line
+        self._col = col
+
 class v8HeapExplorer:
     """ iterator all objects in v8 heap """
     pass
@@ -272,7 +281,12 @@ class HeapSnapshot:
     kObjectIdStep = 2
 
     def __init__(self):
-        
+       
+        self._isolate = v8.Isolate.GetCurrent()
+        if self._isolate is None:
+            print("isolate is not set.")
+            raise Exception
+ 
         #self._size = 0
         #self._cnt = 0
 
@@ -335,20 +349,13 @@ class HeapSnapshot:
         """ return the GC_ROOT by index """
         return self.gc_subroot_entries_[index]
 
-    def isolate(self):
-        self._isolate = v8.Isolate.GetCurrent()
-        if self._isolate is None:
-            print("isolate is not set.")
-            raise Exception
-        return self._isolate
-
     def heap(self):
         """ return the Heap object(py) """
-        return self.isolate().Heap()
+        return self._isolate.Heap()
 
     def initRootNames(self):
         """ init the root name table """
-        root_index = self.isolate().Roots()
+        root_index = self._isolate.Roots()
         for i in range(v8.RootIndex.kFirstStrongOrReadOnlyRoot, v8.RootIndex.kLastStrongOrReadOnlyRoot):
             ptr = int(root_index.root(i))
             name = root_index.Name(i)
@@ -467,7 +474,12 @@ class HeapSnapshot:
 
         if v8.InstanceType.isJSFunction(obj_type):
             o = v8.JSFunction(obj)
-            name = o.FunctionNameStr()
+            shared = o.shared_function_info
+            script = shared.script
+            if script is not None:
+                name = "%s %s" % (shared.NameStr(), script.name)
+            else:
+                name = shared.NameStr()
             return self.AddEntryObjectSize(heap_obj, HeapEntry.kClosure, name)
 
         elif v8.InstanceType.isJSBoundFunction(obj_type):
@@ -506,7 +518,7 @@ class HeapSnapshot:
             return self.AddEntryObjectSize(heap_obj, HeapEntry.kCode, o.DebugName())
 
         elif v8.InstanceType.isScript(obj_type):
-            o = v8.Script(obj) 
+            o = v8.Script(obj)
             return self.AddEntryObjectSize(heap_obj, HeapEntry.kCode, o.DebugName())
 
         elif v8.InstanceType.isNativeContext(obj_type):
@@ -551,6 +563,8 @@ class HeapSnapshot:
             #raise Exception
             #id = entry.id_
             #entry = self._AddEntry(typ, name, size, 0, object_id = id)
+            if v8.InstanceType.isScript(obj.instance_type):
+                print(entry, entry.name)
             return entry
         
         def good_name(name):
@@ -622,7 +636,8 @@ class HeapSnapshot:
     #    self._AddEntry(0, "", size, 0)
 
     def AddLocation(self, entry, script, line, col):
-        pass
+        l = SourceLocation(entry, script, line, col)
+        self.locations_.append(l)
 
     def GetConstructorName(self, jsobj):
         """ Get Constructor Name for JSObject
@@ -649,11 +664,24 @@ class HeapSnapshot:
 
         # TBD: treat global objects as roots
 
-    def IsSessentialObject(self, tag):
+    def IsSessentialObject(self, obj):
         """ heapobject, not oddball, not roots.
         """
-        if not v8.HeapObject.IsValid(tag):
-            return False
+        if not obj.IsHeapObject(): return False
+        if obj.IsOddball(): return False
+        roots = self._isolate.Roots()
+        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
+        if obj == roots.empty_byte_array: return False
+        if obj == roots.empty_fixed_array: return False
+        if obj == roots.empty_weak_fixed_array: return False
+        if obj == roots.empty_descriptor_array: return False
+        if obj == roots.fixed_array_map: return False
+        if obj == roots.cell_map: return False
+        if obj == roots.global_property_cell_map: return False
+        if obj == roots.shared_function_info_map: return False
+        if obj == roots.free_space_map: return False
+        if obj == roots.one_pointer_filler_map: return False
+        if obj == roots.two_pointer_filler_map: return False
         return True
 
     def SetReferenceValue(self, typ, parent_entry, name_or_index, child_tag):
@@ -672,8 +700,16 @@ class HeapSnapshot:
         #    raise Exception
         #    return 
 
+        # check if child_obj is a HeapObject
+        assert isinstance(child_obj, v8.HeapObject)
+        if not child_obj.IsHeapObject():
+            return
+
         child_entry = self.GetEntry(child_obj)
         assert child_entry is not None, child_obj
+
+        if not self.IsSessentialObject(child_obj):
+            return
 
         # based on typeof(name_or_index)
         if isinstance(name_or_index, int):
@@ -690,18 +726,35 @@ class HeapSnapshot:
 
     def SetReferenceElement(self, typ, parent_entry, name_or_index, child_obj):
         assert isinstance(name_or_index, int)
-        
+       
+        if not child_obj.IsHeapObject():
+            return
+
         child_entry = self.GetEntry(child_obj)
         assert child_entry is not None
        
         parent_entry.SetIndexedReference(typ, name_or_index, child_entry)
 
-    def ExtractReferencesMap(self, parent_entry, parent_obj):
+    def ExtractReferencesAccessorInfo(self, parent_entry, obj):
+        o = v8.AccessorInfo(obj)
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "name", v8.HeapObject(o.name))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "data", v8.HeapObject(o.data))
+
+    def ExtractReferencesAccessorPair(self, parent_entry, obj):
+        o = v8.AccessorPair(obj)
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
+
+    def ExtractReferencesMap(self, parent_entry, obj):
         # transitions
         # isWeak
-        m = v8.Map(parent_obj)
+        m = v8.Map(obj)
+        assert m.IsMap()
         typ = m.instance_type
-        field = m.transitions_or_prototype_info
+        field = v8.HeapObject(m.transitions_or_prototype_info)
         if field.IsHeapObject() and field.IsWeak():
             # is a weak HeapObject
             self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "transition", field)
@@ -710,62 +763,60 @@ class HeapSnapshot:
             if v8.InstanceType.isTransitionArray(typ):
                 # TransitionArray
                 # TBD: Tag (prototype transitions)
-                self.TagObject(field, "(transition array)")
+                #self.TagObject(field, "(transition array)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "transitions", field)
 
             elif v8.InstanceType.isFixedArray(typ):
                 # FixedArray
-                self.TagObject(field, "(transition)")
+                #self.TagObject(field, "(transition)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "transition", field)
 
             elif m.is_prototype_map:
                 # prototype_info
-                self.TagObject(field, "prototype_info")
+                #self.TagObject(field, "prototype_info")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype_info", field)
 
         # descriptors 
-        descriptors = m.instance_descriptors
-        self.TagObject(descriptors, "(map descriptors)")
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "descriptors", descriptors)
+        #self.TagObject(descriptors, "(map descriptors)")
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "descriptors", v8.HeapObject(m.instance_descriptors))
 
         # prototype
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype", m.prototype)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "prototype", v8.HeapObject(m.prototype))
 
         # context, back pointer, constructor
-        field = m.native_context
+        field = v8.HeapObject(m.native_context)
         if v8.InstanceType.isNativeContext(typ):
-            self.TagObject(field, "(native context)")
+            #self.TagObject(field, "(native context)")
             self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "native_context", field)
         else:
             typ = v8.HeapObject(field).instance_type
             if v8.InstanceType.isMap(typ):
-                self.TagObject(field, "(back pointer)")
+                #self.TagObject(field, "(back pointer)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "back_pointer", field)
 
             elif v8.InstanceType.isFunctionTemplateInfo(typ):
-                self.TagObject(field, "(constructor function data)")
+                #self.TagObject(field, "(constructor function data)")
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "constructor_function_data", field)
 
             else:
                 self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "constructor", field)
 
         # dependent_code
-        field = m.dependent_code
-        self.TagObject(field, "(dependent_code")
+        field = v8.HeapObject(m.dependent_code)
+        #self.TagObject(field, "(dependent_code")
         self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "dependent_code", field)
 
-    def ExtractReferencesDescriptorArray(self, parent_entry, parent_obj):
-        o = v8.DescriptorArray(parent_obj.address)
-
-        self.SetReferenceValue(HeapGraphEdge.kInternal, parent_entry, "enum_cache", o.enum_cache)
+    def ExtractReferencesDescriptorArray(self, parent_entry, obj):
+        o = v8.DescriptorArray(obj.address)
+        self.SetReferenceValue(HeapGraphEdge.kInternal, parent_entry, "enum_cache", v8.HeapObject(o.enum_cache))
         cnt = o.number_of_descriptors
         for i in range(cnt):
-            p = o.GetKey(i)
-            print("DescriptorArray[%d]: %s"%(i, p))
+            p = v8.HeapObject(o.GetKey(i))
+            #print("DescriptorArray[%d]: %s"%(i, p))
             if p.IsWeak():
-                self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, i, p)
+                self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "%d" % i, p)
             else:
-                self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, i, p)
+                self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "%d" % i, p)
 
     def ExtractReferencesWeakArray(self, entry, obj):
         o = v8.WeakFixedArray(obj.address)
@@ -796,14 +847,7 @@ class HeapSnapshot:
         length = o.length
         for i in range(length):
             tag = o.Get(i)
-            if not v8.HeapObject.IsValid(tag):
-                continue
-
-            p = v8.HeapObject(tag)
-            #if not p.isHeapObject():
-            #    continue
-            #print("FixedArray[%d]: 0x%x"%(i, p.tag()))
-            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, i, p)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "%d" % i, v8.HeapObject(tag))
 
     def ExtractReferencesPropertyCell(self, entry, obj):
         o = v8.PropertyCell(obj.address)
@@ -812,59 +856,223 @@ class HeapSnapshot:
 
     def ExtractReferencesSymbol(self, entry, obj):
         o = v8.Symbol(obj.address)
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.name))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.description))
+
+    def ExtractReferencesCode(self, entry, obj):
+        o = v8.Code(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "relocation_info", v8.HeapObject(o.relocation_info))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "deoptimization_data", v8.HeapObject(o.deoptimization_data))
+        if o.source_position_table is not None:
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "source_position_table", v8.HeapObject(o.source_position_table))
 
     def ExtractReferencesCell(self, entry, obj):
         o = v8.Cell(obj.address)
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
 
+    def ExtractReferencesFeedbackCell(self, entry, obj):
+        o = v8.FeedbackCell(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
+
+    def ExtractReferencesFeedbackVector(self, entry, obj):
+        o = v8.FeedbackVector(obj.address)
+        if o.IsWeak():
+            code = v8.HeapObject(o.maybe_optimized_code)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "optimized code", code)
+
+    def ExtractReferencesPropertyCell(self, entry, obj):
+        o = v8.PropertyCell(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "dependent_code", v8.HeapObject(o.dependent_code))
+
     def ExtractReferencesScript(self, entry, obj):
         o = v8.Script(obj.address)
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "source", v8.HeapObject(o.source))
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.name))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "context_data", v8.HeapObject(o.context_data))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "line_ends", v8.HeapObject(o.line_ends))
+
+        context_data = v8.HeapObject(o.context_data)
+        if context_data.IsHeapObject():
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "context_data", context_data)
+
+        line_ends = v8.HeapObject(o.line_ends)
+        if line_ends.IsHeapObject():
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "line_ends", line_ends)
 
     def ExtractReferncesContext(self, entry, obj):
-        o = v8.Context(obj.address)
+        context = v8.Context(obj.address)
+        instance_type = context.map.instance_type
 
-    def ExtraceReferencesJSObject(self, entry, obj):
+        scope_info = v8.ScopeInfo(context.scope_info)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "scope_info", scope_info)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "previous", v8.HeapObject(context.previous))
+
+        if context.IsNativeContext():
+            native_context = v8.NativeContext(obj.address)
+            for name, value in native_context.WalkAllSlots():
+                self.SetReferenceObject(HeapGraphEdge.kInternal, entry, name, v8.HeapObject(value))
+        else:
+            for local_name, value in context.WalkAllSlots():
+                local = v8.HeapObject(value)
+                if local.IsHeapObject():
+                    self.SetReferenceObject(HeapGraphEdge.kContextVariable, entry, local_name, local)
+
+            #func_name = scope_info.FunctionName()
+            #if func_name is not None:
+            #    self.SetReferenceObject(HeapGraphEdge.kContextVariable, entry, local_name, value)
+
+    def ExtractReferencesJSObject(self, entry, obj):
         o = v8.JSObject(obj.address)
 
         # extract properties
         for (k,d,v) in o.WalkAllProperties():
             if d.location == v8.PropertyLocation.kField:
+                if d.IsDouble():
+                    continue
+
                 child = v8.HeapObject(v)
                 if child.IsHeapObject():
                     self.SetReferenceObject(HeapGraphEdge.kProperty, entry, k, child)
 
         # extract elements
-        if not o.elements_array.IsByteArray():
+        if not o.elements_array.IsByteArray() and not o.elements_array.IsFixedDoubleArray():
             for (i,v) in o.WalkAllElements():
                 child = v8.HeapObject(v)
                 if child.IsHeapObject():
                     self.SetReferenceElement(HeapGraphEdge.kElement, entry, i, child)
 
+        # __proto__ 
+        proto = v8.HeapObject(o.GetPrototype())
+        self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "__proto__", proto)
+
+        if o.IsJSBoundFunction():
+            bound_fun = v8.JSBoundFunction(obj.address) 
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "bindings", v8.HeapObject(bound_fun.bound_arguments))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "bound_this", v8.HeapObject(bound_fun.bound_this))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "bound_function", v8.HeapObject(bound_fun.bound_target_function))
+            
+            args = bound_fun.bound_arguments
+            if args.IsFixedArray():
+                for i in range(args.length):
+                    v = v8.HeapObject(args.Get(i))
+                    self.SetReferenceObject(HeapGraphEdge.kShortcut, entry, "bound_argument_%d" % i, v)
+
+        elif o.IsJSFunction():
+            js_fun = v8.JSFunction(obj.address)
+            shared_info = js_fun.shared_function_info
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "feedback_cell", v8.HeapObject(js_fun.feedback_cell))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "shared", shared_info)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "context", js_fun.context)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "code", js_fun.code)
+
+            if js_fun.prototype_or_initial_map is not None:
+                proto_or_map = v8.HeapObject(js_fun.prototype_or_initial_map)
+                if not proto_or_map.IsTheHole():
+                    if proto_or_map.IsMap():
+                        self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", v8.HeapObject(js_fun.prototype))
+                        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "initial_map", proto_or_map)
+                    else:
+                        self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", proto_or_map)
+
+        elif o.IsJSGlobalObject():
+            glob = v8.JSGlobalObject(obj.address)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "native_context", v8.HeapObject(glob.native_context))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "global_proxy", v8.HeapObject(glob.global_proxy))
+
         # maybe hash
-        hash_or_properties = o.raw_properties
-        if hash_or_properties.IsHeapObject():
-            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, 'properties', o.raw_properties)
-    
-        raw_elements = v8.HeapObject(o.raw_elements)
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, 'elements', raw_elements)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, 'properties', v8.HeapObject(o.raw_properties))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, 'elements', v8.HeapObject(o.raw_elements))
+
+    def ExtractReferencesSharedFunctionInfo(self, entry, obj):
+        o = v8.SharedFunctionInfo(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name_or_scope_info", v8.HeapObject(o.name_or_scope_info))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "script_or_debug_info", v8.HeapObject(o.script_or_debug_info))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "function_data", v8.HeapObject(o.function_data))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "raw_outer_scope_info_or_feedback_metadata", v8.HeapObject(o.outer_scope_info_or_feedback_metadata))
+
+    def ExtractReferencesJSGlobalProxy(self, entry, obj):
+        o = v8.JSGlobalProxy(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "native_context", v8.HeapObject(o.native_context))
 
     def ExtractReferences(self, entry, obj):
         #log.debug("ExtractReferences : 0x%x"% (obj.address))
 
         typ = obj.instance_type
+        #print("<0x%x> %s" % (obj, v8.InstanceType(typ).name))
+
         """ only for debugging
         """
-        if v8.InstanceType.isString(typ):
-            # String
-            self.ExtractReferencesString(entry, obj)
+        if v8.InstanceType.isJSGlobalProxy(typ):
+            self.ExtractReferencesJSGlobalProxy(entry, obj)
+
+        # TBD: JSArrayBuffer
 
         elif v8.InstanceType.isJSObject(typ):
-            self.ExtraceReferencesJSObject(entry, obj)
+            # TBD: JSWeakSet, JSSet, JSMap, JSPromise, JSGeneratorObject
+            self.ExtractReferencesJSObject(entry, obj)
+        
+        elif v8.InstanceType.isString(typ):
+            self.ExtractReferencesString(entry, obj)
+
+        elif v8.InstanceType.isSymbol(typ):
+            self.ExtractReferencesSymbol(entry, obj)
+        
+        elif v8.InstanceType.isMap(typ):
+            self.ExtractReferencesMap(entry, obj)
+
+        elif v8.InstanceType.isSharedFunctionInfo(typ):
+            self.ExtractReferencesSharedFunctionInfo(entry, obj)
+
+        elif v8.InstanceType.isScript(typ):
+            self.ExtractReferencesScript(entry, obj)
+
+        elif v8.InstanceType.isAccessorInfo(typ):
+            self.ExtractReferencesAccessorInfo(entry, obj)
+
+        elif v8.InstanceType.isAccessorPair(typ):
+            self.ExtractReferencesAccessorPair(entry, obj)
+
+        elif v8.InstanceType.isCode(typ):
+            self.ExtractReferencesCode(entry, obj)
+
+        elif v8.InstanceType.isCell(typ):
+            self.ExtractReferencesCell(entry, obj)
+
+        # TBD: FeedbackCell
+
+        elif v8.InstanceType.isPropertyCell(typ):
+            self.ExtractReferencesPropertyCell(entry, obj)
+
+        # TBD: AllocationSite
+
+        elif v8.InstanceType.isFeedbackVector(typ):
+            self.ExtractReferencesFeedbackVector(entry, obj)
+
+        elif v8.InstanceType.isDescriptorArray(typ):
+            self.ExtractReferencesDescriptorArray(entry, obj)
+
+        # TBD: WeakFixedArray
+
+        # TBD: WeakArrayList
+
+        elif v8.InstanceType.isContext(typ):
+            self.ExtractReferncesContext(entry, obj)
+
+        # TBD: EphemronHashTable
+
+        # TBD: FixedArray
+        elif v8.InstanceType.isFixedArray(typ):
+            self.ExtractReferencesFixedArray(entry, obj)
+
+    def ExtractLocation(self, entry, obj):
+        if obj.IsJSFunction():
+            js_fun = v8.JSFunction(obj.address) 
+            script = js_fun.shared_function_info.script
+            if script is None:
+                return
+
+            script_id = int(script.id)
+            self.AddLocation(entry, script_id, 0, 0)
+
+        # TBD: JSObject Constructor
 
     def AddSyntheticRootEntries(self):
         """ Add all Synthetic Root Entries 
@@ -983,9 +1191,12 @@ class HeapSnapshot:
         # show Tagged Pointer in heapsnapshot 
         entry.SetNamedReference(HeapGraphEdge.kInternal, "0x%x" % obj, self.mem_entry_)
 
+        # Extrace Location
+        self.ExtractLocation(entry, obj)
+
     def IterateROHeapObjects(self):
         cnt = 0
-        ro_heap = self.isolate().ReadOnlyHeap()
+        ro_heap = self._isolate.ReadOnlyHeap()
         failed = []
         for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
             self.ParseObject(obj)
@@ -1002,11 +1213,14 @@ class HeapSnapshot:
         heap = self.heap()
         failed = []
         for obj in v8.HeapObjectIterator(heap):
-            try:
+            if cfg.cfgObjectDecodeFailedAction == 0:
                 self.ParseObject(obj)
-            except Exception as e:
-                log.error("Parse <0x%x> failed: %s" % (obj, e))
-                failed.append(obj)
+            else:
+                try:
+                    self.ParseObject(obj)
+                except Exception as e:
+                    log.error("Parse <0x%x> failed: %s" % (obj, e))
+                    failed.append(obj)
             cnt += 1
 
         print("Iterated %d Objects" % (cnt))
@@ -1102,6 +1316,15 @@ class HeapSnapshot:
                   ]
         return ay
 
+    def SerializeLocations(self):
+        ay = []
+        for n in self.locations_:
+            ay += [ n._entry.index_,
+                    int(n._id),
+                    int(n._line),
+                    int(n._col)]
+        return ay
+
     def SerializeNames(self):
         ay = ["<dummy>"]
         for s in sorted(self.names_.items(), key = lambda k: k[1]):
@@ -1112,6 +1335,7 @@ class HeapSnapshot:
         an = self.SerializeNodes()
         ae = self.SerializeEdges()
         ay = self.SerializeNames()
+        al = self.SerializeLocations()
 
         #nodes = json.dumps(an)
         nodes = '['
@@ -1130,6 +1354,15 @@ class HeapSnapshot:
             else:
                 edges += ",%d,%d,%d\n" % (ae[i], ae[i+1], ae[i+2])
         edges += ']'
+
+        # locations
+        locations = '['
+        for i in range(0, len(al), 4):
+            if i == 0:
+                locations += "%d,%d,%d,%d\n" % (al[i], al[i+1], al[i+2], al[i+3])
+            else:
+                locations += ",%d,%d,%d,%d\n" % (al[i], al[i+1], al[i+2], al[i+3])
+        locations += ']'
 
         # one string one line
         names = json.dumps(ay, indent=0, separators=(',', ':'))
@@ -1156,7 +1389,7 @@ class HeapSnapshot:
 "trace_function_infos":[],
 "trace_tree":[],
 "samples":[],
-"locations":[],
+"locations":%s,
 "strings":%s
 }''' % (
             meta,
@@ -1164,6 +1397,7 @@ class HeapSnapshot:
             len(self.children_),
             nodes,
             edges,
+            locations,
             names
         )
  

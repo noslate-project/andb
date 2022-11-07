@@ -288,15 +288,17 @@ class HeapVisitor:
             if for_type is None or \
                     for_type == obj.instance_type:
                 self.PrintObject(obj)
-            elif cnt % 10000 == 0:
-                print("%d" % cnt)
+            #elif cnt % 10000 == 0:
+            #    print("%d" % cnt)
             size += obj.Size()
         print("Total Cnt(%d), Size(%d)" % (cnt, size))
 
     def ShowGlobalObject(self):
-        glob = self._heap.GetGlobalObject()
-        print("JSGlobalObject: 0x%x" % (glob.tag()))
-        glob.DebugPrint()
+        native_context = self._heap.GetNativeContextList()
+        while native_context.IsNativeContext():
+
+            print("JSGlobalObject: %s" % (native_context.GetJSGlobalObject()))
+            native_context = native_context.GetNextContextLink()
 
     """ Public
     """
@@ -613,4 +615,41 @@ class StringVisitor(object):
             print("%d: %10u %s" % (cnt, size, f))
 
         print("Total Cnt(%d), Size(%d)" % (cnt, size))
+
+class TestVisitor(object):
+
+    @classmethod
+    def FunctionContextScripts(cls, argv):
+        iso = v8.Isolate.GetCurrent()
+        hp = iso.Heap()
+        space = hp.getSpace(argv[0])
+        if space is None:
+            return
+       
+        tbl = {}
+        iterator = v8.PagedSpaceObjectIterator(space)
+        for obj in iterator:
+            if not v8.InstanceType.isSharedFunctionInfo(obj.instance_type):
+                continue
+
+            fun = v8.SharedFunctionInfo(obj.address)
+            script = fun.script
+            if script is None:
+                continue
+
+            if script.name in tbl:
+                tbl[script.name] += 1
+            else:
+                tbl[script.name] = 1
+
+        for i in (sorted(tbl.items(), key = lambda v:(v[1], v[0]), reverse = False)):
+            print("%s : %d" % (i[0], i[1]))
+
+    @classmethod
+    def FindFunction(cls, argv):
+        iso = v8.Isolate.GetCurrent()
+        heap = iso.Heap()
+        space = heap.getSpace('old')
+        
+
 

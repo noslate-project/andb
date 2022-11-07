@@ -195,6 +195,10 @@ class InstanceType(Enum):
     @classmethod
     def isNativeContext(cls, num):
         return cls.isType("NATIVE_CONTEXT_TYPE", num)
+    
+    @classmethod
+    def isFunctionContext(cls, num):
+        return cls.isType("FUNCTION_CONTEXT_TYPE", num)
 
     @classmethod
     def isScopeInfo(cls, num):
@@ -448,6 +452,15 @@ class InstanceType(Enum):
         """
         pass
 
+class RepresentationKind(Enum):
+    _typeName = "v8::internal::Representation::Kind"
+
+    kNone = 0
+    kSmi = 1
+    kDouble = 2
+    kHeapObject = 3
+    kTagged = 4
+
 
 class LanguageMode(Enum):
     _typeName = 'v8::internal::LanguageMode'
@@ -455,6 +468,7 @@ class LanguageMode(Enum):
 
 class PromiseState(Enum):
     _typeName = 'v8::Promise::PromiseState'
+
 
 
 class PropertyAttributes(Enum):

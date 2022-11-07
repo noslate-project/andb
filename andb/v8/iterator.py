@@ -101,6 +101,7 @@ class ChunkObjectIterator:
         try:
             ptr += ho.Size()
         except:
+            print("failed: %x" % ptr)
             return None
        
         # current allocation top and limit 
@@ -211,6 +212,7 @@ class PagedSpaceObjectIterator:
     def nextChunk(self):
         try:
             p = next(self._iter_chunk)
+            #print(p)
             return p
         except StopIteration:
             #print("finish space")

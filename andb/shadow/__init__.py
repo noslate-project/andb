@@ -7,6 +7,7 @@ from .visitor import (
     NodeEnvGuesser,
     StackVisitor,
     StringVisitor,
+    TestVisitor,
 )
 
 from .heap_snapshot import (
