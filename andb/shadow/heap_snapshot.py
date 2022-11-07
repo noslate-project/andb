@@ -808,16 +808,15 @@ class HeapSnapshot:
 
     def ExtractReferencesDescriptorArray(self, parent_entry, obj):
         o = v8.DescriptorArray(obj.address)
-
-        self.SetReferenceValue(HeapGraphEdge.kInternal, parent_entry, "enum_cache", o.enum_cache)
+        self.SetReferenceValue(HeapGraphEdge.kInternal, parent_entry, "enum_cache", v8.HeapObject(o.enum_cache))
         cnt = o.number_of_descriptors
         for i in range(cnt):
-            p = o.GetKey(i)
-            print("DescriptorArray[%d]: %s"%(i, p))
+            p = v8.HeapObject(o.GetKey(i))
+            #print("DescriptorArray[%d]: %s"%(i, p))
             if p.IsWeak():
-                self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, i, p)
+                self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "%d" % i, p)
             else:
-                self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, i, p)
+                self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "%d" % i, p)
 
     def ExtractReferencesWeakArray(self, entry, obj):
         o = v8.WeakFixedArray(obj.address)
@@ -859,9 +858,31 @@ class HeapSnapshot:
         o = v8.Symbol(obj.address)
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "name", v8.HeapObject(o.description))
 
+    def ExtractReferencesCode(self, entry, obj):
+        o = v8.Code(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "relocation_info", v8.HeapObject(o.relocation_info))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "deoptimization_data", v8.HeapObject(o.deoptimization_data))
+        if o.source_position_table is not None:
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "source_position_table", v8.HeapObject(o.source_position_table))
+
     def ExtractReferencesCell(self, entry, obj):
         o = v8.Cell(obj.address)
         self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
+
+    def ExtractReferencesFeedbackCell(self, entry, obj):
+        o = v8.FeedbackCell(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
+
+    def ExtractReferencesFeedbackVector(self, entry, obj):
+        o = v8.FeedbackVector(obj.address)
+        if o.IsWeak():
+            code = v8.HeapObject(o.maybe_optimized_code)
+            self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "optimized code", code)
+
+    def ExtractReferencesPropertyCell(self, entry, obj):
+        o = v8.PropertyCell(obj.address)
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "value", v8.HeapObject(o.value))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "dependent_code", v8.HeapObject(o.dependent_code))
 
     def ExtractReferencesScript(self, entry, obj):
         o = v8.Script(obj.address)
@@ -942,13 +963,14 @@ class HeapSnapshot:
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "context", js_fun.context)
             self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "code", js_fun.code)
 
-            proto_or_map = v8.HeapObject(js_fun.prototype_or_initial_map)
-            if not proto_or_map.IsTheHole():
-                if proto_or_map.IsMap():
-                    self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", v8.HeapObject(js_fun.prototype))
-                    self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "initial_map", proto_or_map)
-                else:
-                    self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", proto_or_map)
+            if js_fun.prototype_or_initial_map is not None:
+                proto_or_map = v8.HeapObject(js_fun.prototype_or_initial_map)
+                if not proto_or_map.IsTheHole():
+                    if proto_or_map.IsMap():
+                        self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", v8.HeapObject(js_fun.prototype))
+                        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "initial_map", proto_or_map)
+                    else:
+                        self.SetReferenceObject(HeapGraphEdge.kProperty, entry, "prototype", proto_or_map)
 
         elif o.IsJSGlobalObject():
             glob = v8.JSGlobalObject(obj.address)
@@ -1008,19 +1030,24 @@ class HeapSnapshot:
         elif v8.InstanceType.isAccessorPair(typ):
             self.ExtractReferencesAccessorPair(entry, obj)
 
-        # TBD: Code
+        elif v8.InstanceType.isCode(typ):
+            self.ExtractReferencesCode(entry, obj)
 
-        # TBD: Cell
+        elif v8.InstanceType.isCell(typ):
+            self.ExtractReferencesCell(entry, obj)
 
         # TBD: FeedbackCell
 
-        # TBD: PropertyCell
+        elif v8.InstanceType.isPropertyCell(typ):
+            self.ExtractReferencesPropertyCell(entry, obj)
 
         # TBD: AllocationSite
 
-        # TBD: FeedbackVector
+        elif v8.InstanceType.isFeedbackVector(typ):
+            self.ExtractReferencesFeedbackVector(entry, obj)
 
-        # TBD: DescriptorArray
+        elif v8.InstanceType.isDescriptorArray(typ):
+            self.ExtractReferencesDescriptorArray(entry, obj)
 
         # TBD: WeakFixedArray
 
