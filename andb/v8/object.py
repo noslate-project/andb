@@ -2539,9 +2539,9 @@ class FeedbackVector(HeapObject):
             { "name":"invocation_count", "type":int },
             { "name":"profiler_ticks", "type":int },
             { "name":"flags", "type":FeedbackVectorFlags },
-            { "name":"shared_function_info", "type":int },
-            { "name":"maybe_optimized_code", "type":int },
-            { "name":"closure_feedback_cell_array", "type":int },
+            { "name":"shared_function_info", "type":Object },
+            { "name":"maybe_optimized_code", "type":Object },
+            { "name":"closure_feedback_cell_array", "type":Object },
             { "name":"feedback_slots[length]", "type":Object },
         ]}
 
@@ -2981,8 +2981,12 @@ class JSFunction(JSObject):
             {"name": "context", "type": Context},
             {"name": "feedback_cell", "type": Object},
             {"name": "code", "type": Code},
-            {"name": "prototype_or_initial_map", "type": Object},
+            {"name": "prototype_or_initial_map?[has_prototype_or_initial_map]", "type": Object},
         ]}
+
+    @property
+    def has_prototype_or_initial_map(self):
+        return self.Size() > self.kPrototypeOrInitialMapOffset 
 
     def FunctionName(self):
         return self.shared_function_info.GetFunctionName()
