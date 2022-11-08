@@ -3204,7 +3204,7 @@ class SharedFunctionInfo(HeapObject):
         name = self.GetFunctionName()
         if name is None or len(name) == 0:
             return ""
-        return str(name)
+        return name
 
     @CachedProperty
     def parameter_count(self):
