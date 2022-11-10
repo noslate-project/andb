@@ -1211,6 +1211,17 @@ class HeapSnapshot:
     def IterateHeapObjects(self):
         cnt = 0
         heap = self.heap()
+        spaces = v8.AllocationSpace.NonROSpaces()
+        for name in spaces:
+            space = heap.getSpace(name)
+            print(space)
+            chunks = space.getChunks()
+            for i in chunks:
+                print(i)
+
+    def IterateHeapObjects2(self):
+        cnt = 0
+        heap = self.heap()
         failed = []
         for obj in v8.HeapObjectIterator(heap):
             if cfg.cfgObjectDecodeFailedAction == 0:

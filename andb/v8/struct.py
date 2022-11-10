@@ -775,6 +775,12 @@ class Space(Struct):
             yield chunk
             ptr = ptr['list_node_']['next_']
 
+    def getChunks(self):
+        chunks = []
+        for i in self.walkPages():
+            chunks.append(i)
+        return chunks
+
 
 class SpaceWithLinearArea(Space):
     _typeName = 'v8::internal::SpaceWithLinearArea'
@@ -852,12 +858,25 @@ class NewSpace(SpaceWithLinearArea):
         from_committed = self.from_space.committed
         return to_committed + from_committed 
 
+    #def walkPages(self):
+    #    for i in self.from_space.walkPages():
+    #        yield i
+    #    for i in self.to_space.walkPages():
+    #        yield i
+
+    def getChunks(self):
+        chunks = []
+        for i in self.walkPages():
+            chunks.append(i)
+        return chunks
+
     def show_sl(self):
         to_committed = self.to_space.committed
         from_committed = self.from_space.committed
         print("%-14s: %10u" % (self.name, to_committed + from_committed))
         print(" - from_space : %10u" % from_committed)
         print(" - to_space   : %10u" % to_committed)
+
 
 if Version.major >= 9:
     class ReadOnlySpace(Struct):
