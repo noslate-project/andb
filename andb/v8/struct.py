@@ -620,9 +620,18 @@ class MemoryChunk(Struct):
             if ptr == spc.top and ptr != spc.limit:
                 ptr = spc.limit
                 continue
-            ho = HeapObject(ptr)
+
+            ho = HeapObject.FromAddress(ptr)
+            if not ho.Access():
+                return
+
             # mp = ho.GetMap()
-            size = ho.Size()
+            try:
+                size = ho.Size()
+            except:
+                print("failed: %x"  % ptr)
+                return
+
             # print("Object(0x%x) size(%d) %s" % (ptr, size, InstanceType.Name(mp.GetType())))
             yield ho
             ptr += size

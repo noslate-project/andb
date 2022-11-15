@@ -114,8 +114,8 @@ class HeapEntry(object):
         kBigInt: '/bigint/',
     }
 
-
     __slots__ = ["_snapshot", "type_", "index_", "self_size_", "id_", "name_", "trace_node_id_", "children_count_", "children_end_count_" ]
+    
     def __init__(self, snapshot):
         self._snapshot = snapshot
 
@@ -273,6 +273,14 @@ class ProgressCounter:
         self._object_size += self._size
         self._count = 0
         self._size = 0;
+
+
+class HeapBuf:
+
+    def __init__(self):
+        self.entrys_ = []
+        self.edges_ = []
+        self.locations_ = []
 
 
 class HeapSnapshot:
@@ -1211,18 +1219,32 @@ class HeapSnapshot:
     def IterateHeapObjects(self):
         cnt = 0
         heap = self.heap()
-        spaces = v8.AllocationSpace.NonROSpaces()
+        failed = []
+        spaces = v8.AllocationSpace.OnlyOldSpaces()
         for name in spaces:
             space = heap.getSpace(name)
-            print(space)
+            print(space.name)
             chunks = space.getChunks()
             for i in chunks:
                 print(i)
+                for obj in i.walk():
+                    try:
+                        self.ParseObject(obj)
+                    except Exception as e:
+                        log.error("Parse <0x%x> failed: %s" % (obj, e))
+                        failed.append(obj)
+                    cnt += 1
+
+        print("Iterated %d Objects" % (cnt))
+        print("failed HeapObject: %d" % (len(failed)))
+        for i in failed:
+            m = i.map
+            print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
 
     def IterateHeapObjects2(self):
         cnt = 0
-        heap = self.heap()
         failed = []
+        heap = self.heap()
         for obj in v8.HeapObjectIterator(heap):
             if cfg.cfgObjectDecodeFailedAction == 0:
                 self.ParseObject(obj)
