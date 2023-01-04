@@ -10,6 +10,14 @@ del _
 
 import os
 import sys
+
+print(os.path.abspath(__file__))
+dirname, filename = os.path.split(__file__)
+dirname = os.path.expanduser(dirname)
+andb_dir = os.path.abspath(dirname)
+
+from andb.loader import FileWrap, GdbLoader, LldbLoader
+
 import argparse
 
 loader_desc = """
@@ -45,16 +53,17 @@ parser = argparse.ArgumentParser(description=loader_desc, formatter_class=argpar
 parser.add_argument('-g', '--gdb', action='store_true', help='using gdb as debugger.')
 parser.add_argument('-l', '--lldb', action='store_true', help='using lldb as debugger. (default)')
 parser.add_argument('-p', '--pid', nargs=1, type=int, help='the process id to attach to.')
-parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile')
+parser.add_argument('-b', '--batch', action='store_true', help='the process id to attach to.')
+parser.add_argument('-t', '--tag', nargs=1, type=int, help='specified version for debugging.')
+parser.add_argument('-m', '--mode', nargs=1, choices=['snapshot', 'cache'], help='mapreduce mode (snapshot, cache).') 
+parser.add_argument('-j', '--jobs', action='store', type=int, help='jobs for mapreduce.')
+parser.add_argument('-x', '--command', dest='cmds', action='append', nargs="+", type=str, help='eval command can be multiple times.')
+parser.add_argument('-xf', '--command-file', dest='cmds', action='append', nargs=1, type=FileWrap, help='eval command can be multiple times.')
+parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile.')
 parser.add_argument('--args', nargs=argparse.REMAINDER, help='debugger options')
 parser.add_argument('binary', nargs="?", type=str, help='node or shinki binaray')
 
 args, dbg_opts = parser.parse_known_args()
-
-print(os.path.abspath(__file__))
-dirname, filename = os.path.split(__file__)
-dirname = os.path.expanduser(dirname)
-andb_dir = os.path.abspath(dirname)
 
 #if not andb_dir in sys.path:
 #    sys.path.insert(0, andb_dir)
@@ -62,7 +71,17 @@ andb_dir = os.path.abspath(dirname)
 #print('gdb:', args.gdb, 'lldb:', args.lldb,
 #  'core:', args.core, 'binary:', args.binary, 'opts:', args.opts)
 
+print(args)
+
+def GetLoader(andb_dir):
+    if args.gdb:
+        return GdbLoader(andb_dir)
+    elif args.lldb:
+        return LldbLoader(andb_dir)
+    return None
+
 binary = None
+typfile = None
 
 if args.binary:
     """ use specified binary
@@ -82,53 +101,112 @@ elif args.core:
     corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader()
     info = corefileAuxiliaryDownloader.Download(buildId)
 
-    os.environ['ANDB_TYP'] = info['typ']
+    typfile = info['typ']
+    os.environ['ANDB_TYP'] = typfile 
 
     if 'bin' in info:
         binary = info['bin']
 
+def MapProcess(concurrency):
+    loader = GetLoader(andb_dir)
+    cmds = ['iso g p', 'mapreduce map %d'%concurrency]
+    cmds = [x.split() for x in cmds]
+    loader.SetExec(binary)
+    loader.SetTyp(typfile)
+    loader.SetCore(args.core)
+    loader.BatchOn()
+    loader.AddCommands(cmds)
+    opts = loader.Opts()
+    os.system(" ".join(opts)) 
+    return opts
 
-if args.lldb:
-    """ start lldb
-    """
-    opts = ['lldb', 
-            '-x',  # no any .lldbinit
-            '-o "com sc im %s/init/lldbinit.py"' % andb_dir,  # lldbinit python script
-            '-s %s/init/lldbinit.cmd' % andb_dir,  # lldbinit command
-           ]
-    if binary:
-        opts.append(binary)
+def SnapProcess(index):
+    print("my index is %d" % index)
+    loader = GetLoader(andb_dir)
+    cmds = ['iso g p', 'mapreduce snapshot %d'%index]
+    cmds = [x.split() for x in cmds]
+    loader.SetExec(binary)
+    loader.SetTyp(typfile)
+    loader.SetCore(args.core)
+    loader.BatchOn()
+    loader.AddCommands(cmds)
+    opts = loader.Opts()
+    os.system(" ".join(opts)) 
+    return opts
+
+def ReduceProcess(concurrency):
+    loader = GetLoader(andb_dir)
+    cmds = ['iso g p', 'mapreduce reduce %d'%concurrency]
+    cmds = [x.split() for x in cmds]
+    loader.SetExec(binary)
+    loader.SetTyp(typfile)
+    loader.SetCore(args.core)
+    loader.BatchOn()
+    loader.AddCommands(cmds)
+    opts = loader.Opts()
+    os.system(" ".join(opts)) 
+    return opts
+
+def MapReduce():
+    from multiprocessing import Process
+    from time import time
+
+    t0 = time()
+    concurrency = 4 
+    if args.jobs:
+        concurrency = args.jobs
+
+    # map 
+    p = Process(target=MapProcess, args=(concurrency,))
+    p.start()
+    p.join()
+    t1 = time()
+
+    # reduce
+    plist=[]
+    for i in range(concurrency):
+        p = Process(target=SnapProcess, args=(i,))
+        p.start()
+        plist.append(p)
+
+    for p in plist:
+        print(p)
+        p.join()
+    t2 = time()
+
+    # final 
+    p = Process(target=ReduceProcess, args=(concurrency,))
+    p.start()
+    p.join()
+    t3 = time()
+
+    print('real   {:.3f}s'.format(t3-t0))
+    print('map    {:.3f}s'.format(t1-t0))
+    print('reduce {:.3f}s'.format(t2-t1))
+    print('final  {:.3f}s'.format(t3-t2))
+
+# map reduce mode
+if args.mode:
+    MapReduce()
+    exit(0)
+
+# single process mode
+else:
+    loader = GetLoader(andb_dir)
+
+    if binary: 
+        loader.SetExec(binary)
     if args.core:
-        opts.extend(["-c", args.core])
+        loader.SetCore(args.core)
     if args.pid:
-        opts.append("-p %d" % args.pid[0])
-    if dbg_opts:
-        opts.extend(dbg_opts)
+        loader.SetPid("-p %d" % args.pid[0])
+    if args.batch:
+        loader.BatchOn()
     if args.args and len(args.args) > 0:
-        opts.extend(args.args)
+        loader.AddArgs(args.args)
+    if args.cmds and len(args.cmds) > 0:
+        loader.AddCommands(args.cmds)
 
-    print(" ".join(opts))
+    opts = loader.Opts() 
     os.system(" ".join(opts))
 
-elif args.gdb:
-    """ start gdb 
-    """
-    opts = ['gdb', 
-            '--nh',  # no ~/.gdbinit
-            '--nx',  # no .gdbinit 
-            '-ix %s/init/gdbinit.cmd' % andb_dir,  # gdbinit commands
-            '-x %s/init/gdbinit.py' % andb_dir,  # gdbinit python script
-           ]
-    if binary:
-        opts.append(binary)
-    if args.core:
-        opts.append(args.core)
-    if args.pid:
-        opts.append("-p %d" % args.pid[0])
-    if dbg_opts:
-        opts.extend(dbg_opts)
-    if args.args and len(args.args) > 0:
-        opts.extend(args.args)
-
-    print(" ".join(opts))
-    os.system(" ".join(opts)) 

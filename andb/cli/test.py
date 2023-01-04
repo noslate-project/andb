@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 from andb.dbg import Command, CommandPrefix, Target, Value, Type
 from andb.ptmalloc import ArenaVisitor
-from andb.shadow import ObjectVisitor, TestVisitor
+from andb.shadow import ObjectVisitor, TestVisitor, HeapSnapshot
 
 """ test commands
 """
@@ -156,4 +156,32 @@ class cli_objgraph_backrefs(Command):
         import objgraph
         obj = objgraph.at(argv[0])
         objgraph.show_backrefs(obj, max_depth=5, filename="og_b.png")
+
+
+class cli_mapreduce(CommandPrefix):
+    _cxpr = "mapreduce"
+
+
+class cli_mapreduce(Command):
+    _cxpr = "mapreduce map"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        snap.WriteMap(int(argv[0]))
+
+class cli_snapshot(Command):
+    _cxpr = "mapreduce snapshot"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        index = int(argv[0])
+        snap.DoReduce(index)
+
+class cli_mapreduce(Command):
+    _cxpr = "mapreduce reduce"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        index = int(argv[0])
+        snap.ReduceGenerate(index)
 

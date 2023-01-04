@@ -3,6 +3,7 @@ from __future__ import print_function, division
 
 import time
 import json
+import pickle
 
 import andb.dbg as dbg 
 import andb.v8 as v8
@@ -17,7 +18,18 @@ import andb.py23 as py23
 
 testNames=None
 
-class HeapGraphEdge(object):
+class Picklable(object):
+
+    def __getstate__(self):
+        a = dict([(k, getattr(self,k,None)) for k in self.__slots__])
+        #print(a)
+        return a
+
+    def __setstate__(self,data):
+        for k,v in data.items():
+            setattr(self,k,v)
+
+class HeapGraphEdge(Picklable):
     """ HeapGraphEdge representa a edge between two HeapEntries.
         
     """
@@ -82,7 +94,8 @@ class HeapGraphEdge(object):
     def DebugPrint(self):
         log.print(str(self))
 
-class HeapEntry(object):
+
+class HeapEntry(Picklable):
 
     # Type from 'HeapGraphNode'
     kHidden = 0
@@ -198,7 +211,7 @@ class HeapEntry(object):
     def __str__(self):
         return "<Entry %s>" % (self.name_.encode('unicode_escape'))
 
-class LazyEntry(object):
+class LazyEntry(Picklable):
     __slots__ = ['real_entry_']
 
     def __init__(self):
@@ -246,7 +259,8 @@ class LazyEntry(object):
     #        return "<LazyEntry None>"
     #    return "<LazyEntry %s>" % (self.real_entry_)
 
-class SourceLocation(object):
+
+class SourceLocation(Picklable):
     __slots__ = ["_entry", "_id", "_line", "_col"]
 
     def __init__(self, entry, script_id, line, col):
@@ -715,6 +729,41 @@ class GraphHolder(object):
         del self.edges_[:]
         del self.locations_[:]
 
+    def Validity(self):
+        id_map = {}
+        for p,e in self.entries_map_.items():
+            id_map[id(e)] = p
+
+        for i in self.edges_:
+            print(i)
+            from_entry = id(i.from_entry_)
+            to_entry = id(i.to_entry_)
+            print("from: %x, to: %x" % (id_map[from_entry], id_map[to_entry]))
+
+    @profiler
+    def SaveFile(self, filename):
+        """ write data to file.
+        """
+        a = {"entries_map": self.entries_map_,
+             "entries": self.entries_,
+             "edges": self.edges_,
+             "locations": self.locations_}
+
+        with open(filename, 'wb') as f:
+            pickle.dump(a, f)
+
+    @profiler
+    def LoadFile(self, filename):
+        """ read data from file.
+        """
+        with open(filename, 'rb') as f:
+            a = pickle.load(f)
+
+        self.entries_map_ = a['entries_map']
+        self.entries_ = a['entries']
+        self.edges_ = a['edges']
+        self.locations_ = a['locations']
+
 class ObjectParser(GraphHolder):
 
     def ExtractObject(self, obj):
@@ -1161,8 +1210,6 @@ class HeapSnapshot(GraphHolder):
 
     def __init__(self):
        
-
-
         super(HeapSnapshot, self).__init__()
 
         #self._size = 0
@@ -1208,6 +1255,8 @@ class HeapSnapshot(GraphHolder):
         """ counter
         """
         self._progress_counter = ProgressCounter(self)
+
+        #self._lock = threading.Lock()
 
     def root(self):
         return self.root_entry_
@@ -1396,7 +1445,10 @@ class HeapSnapshot(GraphHolder):
             #    log.error("Parse <0x%x> failed: %s" % (obj, e))
             parser.ExtractObject(obj)
 
-        self.Merge(parser) 
+        #self._lock.acquire()
+        #self.Merge(parser)
+        #self._lock.release()
+        return parser
 
     @profiler
     def Merge(self, parser):
@@ -1479,7 +1531,6 @@ class HeapSnapshot(GraphHolder):
             print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
 
     def IterateHeapObjects(self):
-        cnt = 0
         heap = self.heap()
         failed = []
         spaces = v8.AllocationSpace.OnlyOldSpaces()
@@ -1488,8 +1539,8 @@ class HeapSnapshot(GraphHolder):
             print(space.name)
             chunks = space.getChunks()
             for i in chunks:
-                self.ParsePage(i)         
-
+                self.ParsePage(i)
+       
         print("Iterated %d Objects" % (cnt))
         print("failed HeapObject: %d" % (len(failed)))
         for i in failed:
@@ -1752,3 +1803,88 @@ class HeapSnapshot(GraphHolder):
 
         # clean 
         self.CleanAll()
+
+    def WriteMap(self, concurrency, filename="snapshot.map"):
+        heap = self.heap()
+        spaces = v8.AllocationSpace.OnlyOldSpaces()
+        assert concurrency > 1, print("concurrency error.", concurrency)
+        cnt = 0
+
+        pages = []
+        for i in range(concurrency):
+            pages.append([])
+
+        for name in spaces:
+            space = heap.getSpace(name)
+            print(space.name)
+            chunks = space.getChunks()
+            for i in chunks:
+                pages[cnt%concurrency].append(i.address)
+                cnt = cnt + 1
+       
+        for i in range(concurrency):
+            print("%d: %d" % (i, len(pages[i])))
+
+        with open(filename, 'wb') as f:
+            pickle.dump(pages, f)
+
+    @profiler
+    def DoReduce(self, index, filename="snapshot.map"):
+       
+        with open(filename, 'rb') as f:            
+            pages = pickle.load(f)
+
+        if index >= len(pages):
+            print("index out of range,", index)
+            return
+       
+        parser = ObjectParser()
+        for p in pages[index]:
+            page = v8.MemoryChunk(p)
+            for obj in page.walk():
+                # skip free space
+                if v8.InstanceType.isFreeSpace(obj.instance_type) and \
+                    cfg.cfgHeapSnapshotShowFreeSapce == 0:
+                    continue
+
+                parser.ExtractObject(obj)
+
+        print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
+
+        parser.SaveFile("snapshot_%d.rec" % index)
+
+
+    @profiler
+    def ReduceGenerate(self, index, filename="core.heapsnapshot"):
+        # init helpers
+        self.initRootNames()
+
+        # add all Synthetic entries
+        self.AddSyntheticRootEntries()
+       
+        # iterate roots 
+        self.IterateRoots()
+
+        # iterate Readonly Heap Objects
+        self.IterateROHeapObjects()
+
+        # iterate all Heap Objets
+        #self.IterateHeapObjects()
+        for i in range(index):
+            parser = ObjectParser()
+            parser.LoadFile("snapshot_%d.rec" % i)
+            self.Merge(parser)
+
+        # resolve all edges
+        self.ResolveEdges()
+
+        # Fill the child
+        self.FillChild()
+
+        # output json
+        self.serializer(filename)
+
+        # clean 
+        self.CleanAll()
+        
+
