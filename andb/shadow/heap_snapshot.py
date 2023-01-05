@@ -3,7 +3,10 @@ from __future__ import print_function, division
 
 import time
 import json
-import pickle
+try:
+    import cPickle as pickle
+except:
+    import pickle
 
 import andb.dbg as dbg 
 import andb.v8 as v8
@@ -25,9 +28,14 @@ class Picklable(object):
         #print(a)
         return a
 
-    def __setstate__(self,data):
+    def __setstate__(self, data):
         for k,v in data.items():
             setattr(self,k,v)
+
+def Job(index):
+    parser = ObjectParser()
+    parser.LoadFile("snapshot_%d.rec" % index)
+    return parser 
 
 class HeapGraphEdge(Picklable):
     """ HeapGraphEdge representa a edge between two HeapEntries.
@@ -750,7 +758,7 @@ class GraphHolder(object):
              "locations": self.locations_}
 
         with open(filename, 'wb') as f:
-            pickle.dump(a, f)
+            pickle.dump(a, f, pickle.HIGHEST_PROTOCOL)
 
     @profiler
     def LoadFile(self, filename):
@@ -1595,6 +1603,9 @@ class HeapSnapshot(GraphHolder):
             e.to_entry_ = ResolveEntry(e.to_entry_)
             #assert isinstance(e.to_entry_, HeapEntry), print(e)
 
+        print("Entry %d" % len(self.entries_))
+        print("Edge %d" % len(self.edges_))
+
     def FillChild(self):
 
         acuminate_index = 0
@@ -1826,7 +1837,7 @@ class HeapSnapshot(GraphHolder):
             print("%d: %d" % (i, len(pages[i])))
 
         with open(filename, 'wb') as f:
-            pickle.dump(pages, f)
+            pickle.dump(pages, f, pickle.HIGHEST_PROTOCOL)
 
     @profiler
     def DoReduce(self, index, filename="snapshot.map"):
@@ -1870,9 +1881,19 @@ class HeapSnapshot(GraphHolder):
 
         # iterate all Heap Objets
         #self.IterateHeapObjects()
+        #pool = ThreadPoolExecutor(max_workers=2)
+        #rc = []
+        #for i in range(index):
+        #    t = pool.submit(Job, i)
+        #    rc.append(t)
+        #    
+        #pool.shutdown(wait=True)
+        #for r in rc:
+        #    self.Merge(r.result())
+
         for i in range(index):
             parser = ObjectParser()
-            parser.LoadFile("snapshot_%d.rec" % i)
+            parser.LoadFile('snapshot_%d.rec' % i)
             self.Merge(parser)
 
         # resolve all edges
@@ -1887,4 +1908,4 @@ class HeapSnapshot(GraphHolder):
         # clean 
         self.CleanAll()
         
-
+#
