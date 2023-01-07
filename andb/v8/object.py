@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 
 import re
-import struct
+#import struct
 
 from functools import wraps
 from andb.utility import Logging as log, oneshot, CachedProperty
@@ -310,7 +310,9 @@ class HeapObject(Object, Value):
 
     def __init__(self, obj):
         tag = int(obj)
-        self._address = tag & (~Internal.kHeapObjectTagMask)
+        #self._address = tag & (~Internal.kHeapObjectTagMask)
+        address = tag & (~Internal.kHeapObjectTagMask)
+        self.InitReader(address)
 
     def __int__(self):
         return self.tag
@@ -380,6 +382,7 @@ class HeapObject(Object, Value):
     @CachedProperty
     def instance_type(self):
         """ return Instance Type (InstanceType) """
+        return self.map.instance_type
         try:
             return self.map.instance_type
         except Exception as e:
@@ -708,6 +711,9 @@ class Map(HeapObject):
 
     _typeName = 'v8::internal::Map'
 
+    # cache all Map Object 
+    _map_cache = {} 
+
     """
     // All heap objects have a Map that describes their structure.
     //  A Map contains information about:
@@ -864,6 +870,11 @@ class Map(HeapObject):
             {'name': 'prototype_validity_cell', 'type': Object},  # [Smi, Cell]
             {'name': 'transitions_or_prototype_info', 'type': Object},  # [Map, TransitionArray, PrototypeInfo, Smi]},
         ]}
+
+    #def __new__(cls, tag):
+    #    ret = super(Map, cls).__new__(cls, tag)
+    #    print(ret)
+    #    return ret
 
     """ bitfield helper
     """
@@ -2858,16 +2869,16 @@ class JSObject(JSReceiver):
            
         receiver = self
         # Lookup Symbol.toStringTag
-        it_symbol_to_string_tag = LookupIterator(receiver, 
-                name="Symbol.toStringTag",
-                configuration=LookupIterator.Configuration.PROTOTYPE_CHAIN_SKIP_INTERCEPTOR,
-            )
-        maybe_tag = it_symbol_to_string_tag.GetDataProperty()
-        if maybe_tag:
-            tag = String(maybe_tag)
-            if tag.IsString():
-                #print("2 GetConstructorTuple.tag_name")
-                return (None, tag.ToString())
+        #it_symbol_to_string_tag = LookupIterator(receiver, 
+        #        name="Symbol.toStringTag",
+        #        configuration=LookupIterator.Configuration.PROTOTYPE_CHAIN_SKIP_INTERCEPTOR,
+        #    )
+        #maybe_tag = it_symbol_to_string_tag.GetDataProperty()
+        #if maybe_tag:
+        #    tag = String(maybe_tag)
+        #    if tag.IsString():
+        #        #print("2 GetConstructorTuple.tag_name")
+        #        return (None, tag.ToString())
 
         # Protoperty Iterator
         it = PrototypeIterator(receiver) 
@@ -3966,7 +3977,7 @@ from .enum import (
     RepresentationKind,
 )
 
-from .struct import (
+from .structure import (
     Isolate,
 )
 

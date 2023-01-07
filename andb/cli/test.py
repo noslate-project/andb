@@ -53,6 +53,18 @@ class cli_test_find_function(Command):
     def invoke(self, argv):
         TestVisitor.FindFunction(argv)
 
+class cli_test_value(Command):
+    _cxpr = "test value"
+
+    def invoke(self, argv):
+        TestVisitor.ValueTest(argv)
+
+class cli_test_single(Command):
+    _cxpr = "test single"
+
+    def invoke(self, argv):
+        TestVisitor().SingleValue(argv)
+
 class cli_mm(CommandPrefix):
     _cxpr = "mm"
 

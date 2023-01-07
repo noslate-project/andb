@@ -312,7 +312,7 @@ from .enum import (
     IsStaicFlag,
 )
 
-from .struct import (
+from .structure import (
     Isolate,
 )
 

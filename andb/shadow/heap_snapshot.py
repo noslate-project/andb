@@ -32,11 +32,6 @@ class Picklable(object):
         for k,v in data.items():
             setattr(self,k,v)
 
-def Job(index):
-    parser = ObjectParser()
-    parser.LoadFile("snapshot_%d.rec" % index)
-    return parser 
-
 class HeapGraphEdge(Picklable):
     """ HeapGraphEdge representa a edge between two HeapEntries.
         
@@ -774,6 +769,43 @@ class GraphHolder(object):
 
 class ObjectParser(GraphHolder):
 
+    _non_essential_addrs = [] 
+
+    def __init__(self):
+        super(ObjectParser, self).__init__()
+        self.MakeNonEssentialAddrs()
+
+    def MakeNonEssentialAddrs(self):
+        if len(self._non_essential_addrs) > 0:
+            return 
+        
+        ro_heap = self._isolate.ReadOnlyHeap()
+        for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
+            if obj.IsOddball():
+                self._non_essential_addrs.append(obj.address) 
+
+        roots = self._isolate.Roots()
+        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
+        ar = [roots.empty_byte_array,
+            roots.empty_fixed_array,
+            roots.empty_weak_fixed_array,
+            roots.empty_descriptor_array,
+            roots.fixed_array_map,
+            roots.cell_map,
+            roots.global_property_cell_map,
+            roots.shared_function_info_map,
+            roots.free_space_map,
+            roots.one_pointer_filler_map,
+            roots.two_pointer_filler_map]
+        
+        for o in ar:
+            ho = v8.HeapObject(o)
+            self._non_essential_addrs.append(ho.address)
+
+        print("Cache NonEssetialAddress,")
+        for p in self._non_essential_addrs:
+            print(" 0x%x" % p)
+
     def ExtractObject(self, obj):
         # obj: HeapObject
         assert isinstance(obj, v8.HeapObject)
@@ -796,8 +828,7 @@ class ObjectParser(GraphHolder):
         #entry.SetNamedReference(HeapGraphEdge.kInternal, "0x%x" % obj, self.mem_entry_)
 
         # Extrace Location
-        self.ExtractLocation(entry, obj)
-
+        #self.ExtractLocation(entry, obj)
 
     def AddLocation(self, entry, script, line, col):
         l = SourceLocation(entry, script, line, col)
@@ -806,21 +837,11 @@ class ObjectParser(GraphHolder):
     def IsSessentialObject(self, obj):
         """ heapobject, not oddball, not roots.
         """
-        if not obj.IsHeapObject(): return False
-        if obj.IsOddball(): return False
-        roots = self._isolate.Roots()
-        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
-        if obj == roots.empty_byte_array: return False
-        if obj == roots.empty_fixed_array: return False
-        if obj == roots.empty_weak_fixed_array: return False
-        if obj == roots.empty_descriptor_array: return False
-        if obj == roots.fixed_array_map: return False
-        if obj == roots.cell_map: return False
-        if obj == roots.global_property_cell_map: return False
-        if obj == roots.shared_function_info_map: return False
-        if obj == roots.free_space_map: return False
-        if obj == roots.one_pointer_filler_map: return False
-        if obj == roots.two_pointer_filler_map: return False
+        #if not obj.IsHeapObject(): return False
+        ptr = obj.address
+        for p in self._non_essential_addrs:
+            if ptr == p:
+                return False
         return True
 
     def SetReferenceValue(self, typ, parent_entry, name_or_index, child_tag):
@@ -1279,7 +1300,7 @@ class HeapSnapshot(GraphHolder):
     def heap(self):
         """ return the Heap object(py) """
         return self._isolate.Heap()
-
+    
     def initRootNames(self):
         """ init the root name table """
         root_index = self._isolate.Roots()
@@ -1403,7 +1424,7 @@ class HeapSnapshot(GraphHolder):
         # 4. WeakGlobalHandle
         #TBD
 
-    def ParseObject(self, obj):
+    def ParseObject(self, obj, parser):
         # obj: HeapObject
 
         # tick the progress counter
@@ -1430,38 +1451,40 @@ class HeapSnapshot(GraphHolder):
         #self.ExtractLocation(entry, obj)
 
         # Parser holds the node and edges. 
-        parser = ObjectParser()
+        #parser = ObjectParser()
 
         # Extract info from object
         parser.ExtractObject(obj)
         
         # write back to snapshot
-        self.Merge(parser)
+        #self.Merge(parser)
 
     def ParsePage(self, page):
         parser = ObjectParser()
-
+        cnt = 0
+        failed = []
+        
         for obj in page.walk():
+            cnt = cnt + 1
+
             # skip free space
             if v8.InstanceType.isFreeSpace(obj.instance_type) and \
                 cfg.cfgHeapSnapshotShowFreeSapce == 0:
                 continue
 
-            #try:
-            #    parser.ExtractObject(obj)
-            #except Exception as e:
-            #    log.error("Parse <0x%x> failed: %s" % (obj, e))
-            parser.ExtractObject(obj)
+            try:
+                parser.ExtractObject(obj)
+            except Exception as e:
+                log.error("Parse <0x%x> failed: %s" % (obj, e))
+                failed.append(obj)
 
-        #self._lock.acquire()
-        #self.Merge(parser)
-        #self._lock.release()
-        return parser
+        self.Merge(parser)
+        return (cnt, failed,)
 
     @profiler
     def Merge(self, parser):
 
-        print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
+        #print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
 
         """
         Linkup, Link all entries of parser and snapshot by memory address,
@@ -1528,9 +1551,11 @@ class HeapSnapshot(GraphHolder):
         cnt = 0
         ro_heap = self._isolate.ReadOnlyHeap()
         failed = []
+        parser = ObjectParser()
         for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
-            self.ParseObject(obj)
+            self.ParseObject(obj, parser)
             cnt += 1
+        self.Merge(parser)
 
         print("Iterated %d RO Heap Objects" % (cnt))
         print("failed RO Heap Object: %d" % (len(failed)))
@@ -1539,17 +1564,32 @@ class HeapSnapshot(GraphHolder):
             print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
 
     def IterateHeapObjects(self):
+        from time import time
         heap = self.heap()
-        failed = []
         spaces = v8.AllocationSpace.OnlyOldSpaces()
+        total = 0
+        failed = []
+        
+        t1 = time()
         for name in spaces:
             space = heap.getSpace(name)
-            print(space.name)
             chunks = space.getChunks()
-            for i in chunks:
-                self.ParsePage(i)
-       
-        print("Iterated %d Objects" % (cnt))
+            len_chunks = len(chunks)
+            print("%s : %d pages" % (space.name, len(chunks)))
+            for i in range(len_chunks):
+                c = chunks[i]
+                cnt, fail = self.ParsePage(c)
+
+                total = total + cnt
+                if len(fail) > 0:
+                    failed.extend(fail)
+
+                t2 = time()
+                print("%d/%d 0x%012x: Entry(%d), Edge(%d), Time(%.3fs), Obj(%d)" % 
+                        (i, len_chunks, c, len(self.entries_), len(self.edges_), t2-t1, cnt))
+                t1 = t2 
+
+        print("Iterated %d Objects" % (total))
         print("failed HeapObject: %d" % (len(failed)))
         for i in failed:
             m = i.map
@@ -1579,14 +1619,15 @@ class HeapSnapshot(GraphHolder):
     def ResolveEdges(self):
 
         cnt=0
+        print("Resolve all edges ...")
         for p,v in self.entries_map_.items():
             last = v.GetLastEntry()
             if isinstance(last, LazyEntry):
-                print("0x%x" % p)
+                #print("0x%x" % p)
                 cnt = cnt + 1
                 ho = v8.HeapObject.FromAddress(p)
                 entry = self.GetHeapEntry(ho)
-        print(cnt)
+        print("Done %d resolved." % cnt)
 
         def ResolveEntry(entry):
             if isinstance(entry, HeapEntry):
@@ -1603,8 +1644,7 @@ class HeapSnapshot(GraphHolder):
             e.to_entry_ = ResolveEntry(e.to_entry_)
             #assert isinstance(e.to_entry_, HeapEntry), print(e)
 
-        print("Entry %d" % len(self.entries_))
-        print("Edge %d" % len(self.edges_))
+        print("Total Entry(%d), Edge(%d)" % (len(self.entries_), len(self.edges_)))
 
     def FillChild(self):
 
@@ -1850,8 +1890,11 @@ class HeapSnapshot(GraphHolder):
             return
        
         parser = ObjectParser()
+        cnt = 0
         for p in pages[index]:
             page = v8.MemoryChunk(p)
+            cnt = cnt + 1
+            print("(%d/%d)" % (cnt, len(pages[index])), page)
             for obj in page.walk():
                 # skip free space
                 if v8.InstanceType.isFreeSpace(obj.instance_type) and \

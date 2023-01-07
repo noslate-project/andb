@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 """ v8 engine support
 """
-from .internal import Version, Internal, Struct, ObjectSlot, Enum
+from .internal import Version, Internal, Struct, ObjectSlot, Enum, ChunkBlock
 from andb.utility import CachedProperty, Logging as log
 from itertools import chain
 import andb.stl as stl
@@ -102,6 +102,17 @@ class Isolate(Struct):
     @classmethod
     def GetCurrent(cls):
         return cls._current_isolate
+    
+    def MakeChunkCache(self):
+        heap = self.Heap()
+        spaces = AllocationSpace.AllSpaces() 
+        print("Make ChunkCache ...")
+        for name in spaces:
+            space = heap.getSpace(name)
+            chunks = space.getChunks()
+            for i in chunks:
+                ChunkBlock.AddChunk(i)
+        print("Done ChunkCache, %d chunks cached." % ChunkBlock.CacheSize())
 
     def Heap(self):
         return Heap(self['heap_'].AddressOf(), self)
@@ -393,7 +404,6 @@ class Heap(Struct):
             self.IterateYoung(v)
             self.IterateOld(v)
 
-
     def getIsolate(self):
         if self.parent is not None:
             return self.parent
@@ -611,6 +621,9 @@ class MemoryChunk(Struct):
     @classmethod
     def BaseAddress(cls, ptr):
         return ptr & (~cls.kAlignmentMask)
+
+    def GetOffset(self, address):
+        pass
 
     def walk(self):
         """ walk for objects """

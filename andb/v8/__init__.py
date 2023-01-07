@@ -35,7 +35,7 @@ from __future__ import print_function, division
 
 from .internal import *
 from .enum import *
-from .struct import *
+from .structure import *
 from .object import *
 from .iterator import *
 from .frame import *
