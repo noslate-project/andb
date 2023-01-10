@@ -107,9 +107,9 @@ elif args.core:
     if 'bin' in info:
         binary = info['bin']
 
-def MapProcess(concurrency):
+def IndexProcess(size):
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce map %d'%concurrency]
+    cmds = ['iso g p', 'mapreduce index %d'%size]
     cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
@@ -123,7 +123,7 @@ def MapProcess(concurrency):
 def SnapProcess(index):
     print("my index is %d" % index)
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce snapshot %d'%index]
+    cmds = ['iso g p', 'mapreduce snapshot %d' % index]
     cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
@@ -136,7 +136,7 @@ def SnapProcess(index):
 
 def ReduceProcess(concurrency):
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce reduce %d'%concurrency]
+    cmds = ['iso g p', 'mapreduce reduce']
     cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
@@ -148,8 +148,9 @@ def ReduceProcess(concurrency):
     return opts
 
 def MapReduce():
-    from multiprocessing import Process
+    from multiprocessing import Process, Pool
     from time import time
+    import re
 
     t0 = time()
     concurrency = 4 
@@ -157,33 +158,47 @@ def MapReduce():
         concurrency = args.jobs
 
     # map 
-    p = Process(target=MapProcess, args=(concurrency,))
+    p = Process(target=IndexProcess, args=(100,))
     p.start()
     p.join()
     t1 = time()
 
     # reduce
-    plist=[]
-    for i in range(concurrency):
-        p = Process(target=SnapProcess, args=(i,))
-        p.start()
-        plist.append(p)
+    #plist=[]
+    #for i in range(concurrency):
+    #    p = Process(target=SnapProcess, args=(i,))
+    #    p.start()
+    #    plist.append(p)
 
-    for p in plist:
-        print(p)
-        p.join()
+    #for p in plist:
+    #    print(p)
+    #    p.join()
+
+    reduce_process = Process(target=ReduceProcess, args=(concurrency,))
+    # final 
+    reduce_process.start()
+    
+    maps = [] 
+    for f in os.listdir("snapshot.d"):
+        if f.endswith(".map"):
+            n = re.findall(r'\d+', f)[0]
+            maps.append(int(n))
+    maps.sort()
+    print(maps)
+
+    pool = Pool(processes=concurrency) 
+    [ pool.apply_async(SnapProcess, (i,)) for i in maps ]
+    pool.close()
+    pool.join()
     t2 = time()
 
-    # final 
-    p = Process(target=ReduceProcess, args=(concurrency,))
-    p.start()
-    p.join()
+    reduce_process.join()
     t3 = time()
 
     print('real   {:.3f}s'.format(t3-t0))
     print('map    {:.3f}s'.format(t1-t0))
-    print('reduce {:.3f}s'.format(t2-t1))
-    print('final  {:.3f}s'.format(t3-t2))
+    print('parse  {:.3f}s'.format(t2-t1))
+    print('reduce {:.3f}s'.format(t3-t2))
 
 # map reduce mode
 if args.mode:

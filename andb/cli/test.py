@@ -174,26 +174,25 @@ class cli_mapreduce(CommandPrefix):
     _cxpr = "mapreduce"
 
 
-class cli_mapreduce(Command):
-    _cxpr = "mapreduce map"
+class cli_mapreduce_index(Command):
+    _cxpr = "mapreduce index"
 
     def invoke(self, argv):
         snap = HeapSnapshot()
-        snap.WriteMap(int(argv[0]))
+        snap.MapWriteIndex(int(argv[0]))
 
-class cli_snapshot(Command):
+class cli_mapreduce_snapshot(Command):
     _cxpr = "mapreduce snapshot"
 
     def invoke(self, argv):
         snap = HeapSnapshot()
         index = int(argv[0])
-        snap.DoReduce(index)
+        snap.MapSnapshot(index)
 
-class cli_mapreduce(Command):
+class cli_mapreduce_reduce(Command):
     _cxpr = "mapreduce reduce"
 
     def invoke(self, argv):
         snap = HeapSnapshot()
-        index = int(argv[0])
-        snap.ReduceGenerate(index)
+        snap.ReduceGenerate()
 

@@ -831,6 +831,7 @@ class PagedSpace(SpaceWithLinearArea):
     def show_sl(self):
         print("%-14s: %10u %10u" % (self.name, self.committed, self.max_committed))
 
+
 class SemiSpace(SpaceWithLinearArea):
     _typeName = 'v8::internal::SemiSpace'
 
@@ -922,6 +923,16 @@ if Version.major >= 9:
 
         def show_sl(self):
             print("%-14s: %10u %10u" % (self.name, self.committed, self.max_committed))
+
+        def walkPages(self):
+            for i in stl.Vector(self['pages_']).__iter__():
+                yield MemoryChunk(i)
+
+        def getChunks(self):
+            chunks = []
+            for i in self.walkPages():
+                chunks.append(i)
+            return chunks
 
 else:
     class ReadOnlySpace(PagedSpace):

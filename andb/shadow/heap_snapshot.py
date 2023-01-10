@@ -1,6 +1,7 @@
 
 from __future__ import print_function, division
 
+import os
 import time
 import json
 try:
@@ -1855,46 +1856,55 @@ class HeapSnapshot(GraphHolder):
         # clean 
         self.CleanAll()
 
-    def WriteMap(self, concurrency, filename="snapshot.map"):
+    def MapWriteIndex(self, eachsize=100):
         heap = self.heap()
         spaces = v8.AllocationSpace.OnlyOldSpaces()
-        assert concurrency > 1, print("concurrency error.", concurrency)
-        cnt = 0
+        assert eachsize > 10
+
+        if not os.path.exists("snapshot.d"):
+            os.mkdir("snapshot.d") 
 
         pages = []
-        for i in range(concurrency):
-            pages.append([])
+        cnt = 0
+        page_cnt = 0
+
+        def WriteIndexFile(idx):
+            with open("snapshot.d/snapshot_%d.map" % (idx), 'wb') as f:
+                pickle.dump(pages, f, pickle.HIGHEST_PROTOCOL)
 
         for name in spaces:
             space = heap.getSpace(name)
             print(space.name)
             chunks = space.getChunks()
             for i in chunks:
-                pages[cnt%concurrency].append(i.address)
-                cnt = cnt + 1
-       
-        for i in range(concurrency):
-            print("%d: %d" % (i, len(pages[i])))
+                pages.append(i.address)
 
-        with open(filename, 'wb') as f:
-            pickle.dump(pages, f, pickle.HIGHEST_PROTOCOL)
+                if len(pages) >= eachsize:
+                    # write to index 
+                    WriteIndexFile(page_cnt)
+                    page_cnt = page_cnt + 1
+                    pages = []
+
+                cnt = cnt + 1
+        
+        WriteIndexFile(page_cnt)
+        page_cnt = page_cnt + 1
+        pages = []
+
+        print("Total %d pages in %d maps." % (cnt, page_cnt))
 
     @profiler
-    def DoReduce(self, index, filename="snapshot.map"):
-       
-        with open(filename, 'rb') as f:            
+    def MapSnapshot(self, index):
+      
+        with open("snapshot.d/snapshot_%d.map" % index, 'rb') as f:            
             pages = pickle.load(f)
 
-        if index >= len(pages):
-            print("index out of range,", index)
-            return
-       
         parser = ObjectParser()
         cnt = 0
-        for p in pages[index]:
+        for p in pages:
             page = v8.MemoryChunk(p)
             cnt = cnt + 1
-            print("(%d/%d)" % (cnt, len(pages[index])), page)
+            print("map_%d (%d/%d) page(0x%x)" % (index, cnt, len(pages), page))
             for obj in page.walk():
                 # skip free space
                 if v8.InstanceType.isFreeSpace(obj.instance_type) and \
@@ -1905,11 +1915,11 @@ class HeapSnapshot(GraphHolder):
 
         print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
 
-        parser.SaveFile("snapshot_%d.rec" % index)
-
+        parser.SaveFile("snapshot.d/snapshot_%d.rec.tmp" % index)
+        os.rename("snapshot.d/snapshot_%d.rec.tmp" % index, "snapshot.d/snapshot_%d.rec" % index) 
 
     @profiler
-    def ReduceGenerate(self, index, filename="core.heapsnapshot"):
+    def ReduceGenerate(self, filename="core.heapsnapshot"):
         # init helpers
         self.initRootNames()
 
@@ -1922,22 +1932,34 @@ class HeapSnapshot(GraphHolder):
         # iterate Readonly Heap Objects
         self.IterateROHeapObjects()
 
-        # iterate all Heap Objets
-        #self.IterateHeapObjects()
-        #pool = ThreadPoolExecutor(max_workers=2)
-        #rc = []
-        #for i in range(index):
-        #    t = pool.submit(Job, i)
-        #    rc.append(t)
-        #    
-        #pool.shutdown(wait=True)
-        #for r in rc:
-        #    self.Merge(r.result())
+        # reduce
+        rec_files = [] 
+        for f in os.listdir("snapshot.d"):
+            if f.endswith(".map"):
+                rec = f[:-4] + ".rec"
+                rec_files.append("snapshot.d/%s" % rec)
+        print("Polling %d files ..." % (len(rec_files)))
 
-        for i in range(index):
-            parser = ObjectParser()
-            parser.LoadFile('snapshot_%d.rec' % i)
-            self.Merge(parser)
+        len_files = len(rec_files)
+        while len(rec_files) > 0:
+            print("reduce (%d/%d)" % (len_files - len(rec_files), len_files))
+
+            for f in rec_files:
+                if os.path.exists(f):
+                    print("Merging %s" % f)
+
+                    # merge
+                    parser = ObjectParser()
+                    parser.LoadFile(f)
+                    self.Merge(parser)
+                    parser.CleanAll()
+                    
+                    rec_files.remove(f)
+
+            # delay
+            time.sleep(5)
+
+        print("Polling done.")
 
         # resolve all edges
         self.ResolveEdges()
@@ -1951,4 +1973,4 @@ class HeapSnapshot(GraphHolder):
         # clean 
         self.CleanAll()
         
-#
+
