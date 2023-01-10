@@ -1944,6 +1944,7 @@ class HeapSnapshot(GraphHolder):
         while len(rec_files) > 0:
             print("reduce (%d/%d)" % (len_files - len(rec_files), len_files))
 
+            is_idle = 1
             for f in rec_files:
                 if os.path.exists(f):
                     print("Merging %s" % f)
@@ -1955,9 +1956,11 @@ class HeapSnapshot(GraphHolder):
                     parser.CleanAll()
                     
                     rec_files.remove(f)
+                    is_idle = 0
 
             # delay
-            time.sleep(5)
+            if is_idle:
+                time.sleep(5)
 
         print("Polling done.")
 
