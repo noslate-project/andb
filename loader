@@ -164,18 +164,7 @@ def MapReduce():
     t1 = time()
 
     # reduce
-    #plist=[]
-    #for i in range(concurrency):
-    #    p = Process(target=SnapProcess, args=(i,))
-    #    p.start()
-    #    plist.append(p)
-
-    #for p in plist:
-    #    print(p)
-    #    p.join()
-
     reduce_process = Process(target=ReduceProcess, args=(concurrency,))
-    # final 
     reduce_process.start()
     
     maps = [] 
@@ -186,6 +175,7 @@ def MapReduce():
     maps.sort()
     print(maps)
 
+    # parse
     pool = Pool(processes=concurrency) 
     [ pool.apply_async(SnapProcess, (i,)) for i in maps ]
     pool.close()

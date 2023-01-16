@@ -1,9 +1,9 @@
-
 from __future__ import print_function
 import os
 
 class FileWrap(object):
-
+    """ warp object for file input.
+    """
     def __init__(self, f):
         self._file = f
     
@@ -11,6 +11,9 @@ class FileWrap(object):
         return str(self._file)
 
 class Loader(object):
+    """ Loader base for all debuggers 
+    """
+
     # binary to debug
     _exec = None
 
@@ -85,6 +88,8 @@ class Loader(object):
         return " ".join(slef.Opts())
 
 class GdbLoader(Loader):
+    """ GDB loader
+    """
 
     @property
     def default(self):
@@ -127,6 +132,8 @@ class GdbLoader(Loader):
 
 
 class LldbLoader(Loader):
+    """ GDB loader
+    """
 
     @property
     def default(self):
@@ -146,8 +153,21 @@ class LldbLoader(Loader):
             os.environ['ANDB_TYP'] = self._typ 
         if self._pid:
             opts.extend(['-p', self._pid])
+
+        if self._is_batch:
+            opts.append('-b')
+
+        if self._commands:
+            for i in self._commands:
+                if isinstance(i, FileWrap):
+                    opts.append("-s '%s'" % i.FileName())
+                else:
+                    opts.append("-o '%s'" % i)
+ 
         if self._args:
             opts.extend(self._args)
+        
+        print(opts)
         return opts
 
 
