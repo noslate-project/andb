@@ -248,6 +248,7 @@ class StandardFrame(StackFrame, StandardFrameConstants):
 
     def __init__(self, frame):
         StackFrame.__init__(self, frame)
+        StandardFrameConstants.__init__(self, frame)
         self._context = frame._context_or_frame_type
 
     def Parse(self, context):
@@ -274,6 +275,7 @@ class TypedFrame(StackFrame, TypedFrameConstants):
 
     def __init__(self, frame):
         StackFrame.__init__(self, frame)
+        TypedFrameConstants.__init__(self, frame)
         #self._frame_type = StackFrameType(frame._context_or_frame_type)
 
     def Parse(self, frame_type):
