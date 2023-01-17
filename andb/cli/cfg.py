@@ -19,3 +19,15 @@ class cli_andb_set(Command):
     def invoke(self, argv):
         Config.SetValue(argv[0], argv[1])
 
+class cli_andb_flag(Command):
+    _cxpr = "andb flag"
+
+    def invoke(self, argv):
+        pass
+
+class cli_andb_flag_set(Command):
+    _cxpr = "andb flag set"
+
+    def invoke(self, argv):
+        pass
+

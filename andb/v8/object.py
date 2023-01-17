@@ -305,7 +305,7 @@ class HeapObject(Object, Value):
     @classmethod
     def __autoLayout(cls):
         return {"layout": [
-            {"name": "map", "type": Map},
+            {"name": "map_or_trans", "alias": ["map"], "type": Map},
          ]}
 
     def __init__(self, obj):
@@ -375,8 +375,15 @@ class HeapObject(Object, Value):
         m = self.map
 
         # support forwarding
-        if allow_forward and m.isSmi():
-            m = m.GetMap(allow_forward=0)
+        if allow_forward and m.IsSmi():
+            m = m.GetMap2(allow_forward=0)
+        return m
+
+    @property
+    def map(self):
+        m = self.map_or_trans
+        if m.IsSmi():
+            m = self.map_or_trans.map
         return m
 
     @CachedProperty
@@ -2251,8 +2258,11 @@ class Context(HeapObject):
 
     def WalkAllSlots(self):
         scope_info = ScopeInfo(self.scope_info)
-        local_count = scope_info.context_local_count
 
+        if scope_info.is_empty:
+            return
+
+        local_count = scope_info.context_local_count
         for i in range(local_count):
             name = String(scope_info.context_local_names(i)).ToString()
             o = Object(self.GetLocal(i))
@@ -2488,7 +2498,7 @@ class FreeSpace(HeapObject):
     def __autoLayout(cls):
         return {"layout": [
             {"name": "size", "type": Smi},
-            {"name": "next", "tpye": Object},
+            {"name": "next", "type": Object},
         ]}
 
     def Size(self):
@@ -3935,6 +3945,7 @@ class ObjectMap:
         tag = Internal.TaggedT(obj)
         instance_type = obj.instance_type
         instance_type_num = int(instance_type)
+        assert instance_type_num < len(cls._cached_table), print("instance_type(%d), len(%d) %x" % (instance_type_num, len(cls._cached_table), tag))
         obj_class = cls._cached_table[instance_type_num]
         if obj_class is None:
             log.error('not binding for %s (%d)' % (str(instance_type), int(instance_type)))
