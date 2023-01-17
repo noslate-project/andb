@@ -75,7 +75,6 @@ class CommonFrameConstants(Value):
             {"name": "context_or_frame_type", "type": Object, "offset": cls.kContextOrFrameTypeOffset},
         ]}
 
-
 class StandardFrameConstants(CommonFrameConstants):
     _typeName = 'v8::internal::StandardFrameConstants'
 
@@ -196,6 +195,7 @@ class StackFrame(dbg.Frame):
         if isinstance(frame, dbg.Frame):
             dbg.Frame.__init__(self, frame)
             self._address = frame.GetFP()
+            addr = frame.GetFP()
         elif isinstance(frame, StackFrame):
             self._I_frame = frame._I_frame
             self._address = frame._address
@@ -248,7 +248,8 @@ class StandardFrame(StackFrame, StandardFrameConstants):
 
     def __init__(self, frame):
         StackFrame.__init__(self, frame)
-        StandardFrameConstants.__init__(self, frame)
+        self.InitReader(self._address)
+        #StandardFrameConstants.__init__(self, frame)
         self._context = frame._context_or_frame_type
 
     def Parse(self, context):
@@ -275,7 +276,8 @@ class TypedFrame(StackFrame, TypedFrameConstants):
 
     def __init__(self, frame):
         StackFrame.__init__(self, frame)
-        TypedFrameConstants.__init__(self, frame)
+        self.InitReader(self._address)
+        #TypedFrameConstants.__init__(self, frame)
         #self._frame_type = StackFrameType(frame._context_or_frame_type)
 
     def Parse(self, frame_type):

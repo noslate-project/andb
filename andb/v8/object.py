@@ -363,7 +363,7 @@ class HeapObject(Object, Value):
 
     @property
     def ptr(self):
-        return self._address
+        return self.address
 
     @classmethod
     def cType(cls, val):
