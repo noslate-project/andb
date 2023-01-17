@@ -134,7 +134,7 @@ class HeapEntry(Picklable):
         kBigInt: '/bigint/',
     }
 
-    __slots__ = ["type_", "index_", "self_size_", "id_", "name_", "trace_node_id_", "children_count_", "children_end_count_" ]
+    __slots__ = ["type_", "index_", "self_size_", "id_", "name_", "mem_addr_", "children_count_", "children_end_count_" ]
     
     def __init__(self, snapshot):
         #self._snapshot = snapshot
@@ -156,7 +156,10 @@ class HeapEntry(Picklable):
         self.name_ = None
 
         # not used for now
-        self.trace_node_id_ = 0
+        #self.trace_node_id_ = 0
+
+        # memory address 
+        self.mem_addr_ = 0
 
         # edges count
         self.children_count_ = 0
@@ -376,7 +379,7 @@ class GraphHolder(object):
         self._next_id += self.kObjectIdStep 
         return i
 
-    def _AddEntry(self, typ, name, size, trace_node_id, object_id = -1):
+    def _AddEntry(self, typ, name, size, addr, object_id = -1):
         """ add HeapEntry to self.entries_ 
 
         arguments,
@@ -384,9 +387,9 @@ class GraphHolder(object):
             name: tagged name of the object 
             id : uniq object id 
             self_size : only self node size
-            trace_node_id : not used, always 0
+            mem_addr : HeapObject memory address
         """
-        # print(typ, name, size, trace_node_id, object_id)
+        # print(typ, name, size, addr, object_id)
         if isinstance(name, py23.string_types) or \
                 isinstance(name, py23.text_type):
             pass
@@ -403,7 +406,7 @@ class GraphHolder(object):
         e.type_ = typ
         e.name_ = name
         e.self_size_ = size
-        e.trace_node_id_ = trace_node_id
+        e.mem_addr_ = addr 
         e.id_ = object_id
         #e.DebugPrint()
         #if typ == 3 and len(name) == 0:
@@ -445,6 +448,13 @@ class GraphHolder(object):
         assert ptr not in self.entries_map_
         entry = LazyEntry()
         self.entries_map_[ptr] = entry
+        return entry
+
+    def AddDummyEntry(self, obj):
+        addr = obj.address 
+        # allocate a new object id
+        entry = self._AddEntry(HeapEntry.kHidden, "dummy", 0, addr)
+        self.AddMapHeapEntry(addr, entry)
         return entry
 
     def GetHeapEntry(self, tag):
@@ -609,7 +619,7 @@ class GraphHolder(object):
                 (addr, typ, good_name(name), size))
             
         # allocate a new object id
-        entry = self._AddEntry(typ, name, size, 0)
+        entry = self._AddEntry(typ, name, size, addr)
         self.AddMapHeapEntry(addr, entry)
         return entry
 
@@ -1620,15 +1630,21 @@ class HeapSnapshot(GraphHolder):
     def ResolveEdges(self):
 
         cnt=0
+        failed=0
         print("Resolve all edges ...")
         for p,v in self.entries_map_.items():
             last = v.GetLastEntry()
             if isinstance(last, LazyEntry):
                 #print("0x%x" % p)
-                cnt = cnt + 1
                 ho = v8.HeapObject.FromAddress(p)
-                entry = self.GetHeapEntry(ho)
-        print("Done %d resolved." % cnt)
+                try:
+                    entry = self.GetHeapEntry(ho)
+                    cnt = cnt + 1
+                except Exception as e:
+                    print("Parsing failed %x" % p, e)
+                    entry = self.AddDummyEntry(ho)
+                    failed = failed + 1
+        print("Done, resolved %d, failed %d." % (cnt, failed))
 
         def ResolveEntry(entry):
             if isinstance(entry, HeapEntry):
@@ -1716,7 +1732,7 @@ class HeapSnapshot(GraphHolder):
                     n.id_,
                     n.self_size_,
                     n.children_count_,
-                    n.trace_node_id_,
+                    n.mem_addr_,
                     ]
         return ay 
 
@@ -1733,7 +1749,7 @@ class HeapSnapshot(GraphHolder):
             # edge needs multiple to sizeof(node_fields)
             ay += [ n.type_,
                     int(index),
-                    int(n.to_entry.index_) * 6
+                    int(n.to_entry.index_) * 7
                   ]
         return ay
 
@@ -1762,9 +1778,9 @@ class HeapSnapshot(GraphHolder):
         nodes = '['
         for i in range(0, len(an), 6):
             if i == 0:
-                nodes += "%d,%d,%d,%d,%d,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
+                nodes += "%d,%d,%d,%d,%d,0,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
             else:
-                nodes += ",%d,%d,%d,%d,%d,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
+                nodes += ",%d,%d,%d,%d,%d,0,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
         nodes += ']'
 
         #edges = json.dumps(ae)
@@ -1788,7 +1804,7 @@ class HeapSnapshot(GraphHolder):
         # one string one line
         names = json.dumps(ay, indent=0, separators=(',', ':'))
 
-        meta = '''{"node_fields":["type","name","id","self_size","edge_count","trace_node_id"],
+        meta = '''{"node_fields":["type","name","id","self_size","edge_count","trace_node_id","mem_addr"],
 "node_types":[["hidden","array","string","object","code","closure","regexp","number","native","synthetic","concatenated string","sliced string","symbol","bigint"],"string","number","number","number","number","number"],
 "edge_fields":["type","name_or_index","to_node"],
 "edge_types":[["context","element","property","internal","hidden","shortcut","weak"],"string_or_number","node"],
