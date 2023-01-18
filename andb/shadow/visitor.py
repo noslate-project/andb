@@ -22,7 +22,7 @@ class IsolateGuesser:
         v8.Isolate.SetCurrent(iso)
         # set convenience_variable
         dbg.ConvenienceVariables.Set('isolate', pyo_iso._I_value)
-        iso.MakeChunkCache()
+        #iso.MakeChunkCache()
 
     def CheckIsolate(self, address):
         try:

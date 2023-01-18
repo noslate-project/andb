@@ -379,11 +379,11 @@ class HeapObject(Object, Value):
             m = m.GetMap2(allow_forward=0)
         return m
 
-    @property
+    @CachedProperty
     def map(self):
         m = self.map_or_trans
         if m.IsSmi():
-            m = self.map_or_trans.map
+            m = m.map_or_trans
         return m
 
     @CachedProperty
@@ -3229,8 +3229,14 @@ class SharedFunctionInfo(HeapObject):
 
     @CachedProperty
     def parameter_count(self):
-        return self.formal_parameter_count
-
+        """ Corrected parameter_count
+        """
+        cnt = self.formal_parameter_count
+        # uint16_max kDontAdaptArgumentsSentinel
+        if cnt == 65535:
+            cnt = 0
+        return cnt
+    
     def DebugPrint2(self):
         print(" - function_data :", Object.SBrief(self.function_data))
         print(" - name:", Object.SBrief(self.name_or_scope_info))

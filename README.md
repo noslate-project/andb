@@ -255,7 +255,31 @@ heap snapshot written to 'core.heapsnapshot'
 Generate() takes 14.012 second(s).
 (gdb)
 ``` 
+
 之后使用 devtools 打开 core.heapsnapshot 文件。
+
+
+使用 MapReduce 方法并行导出，
+
+当你有多核的服务器时，可使用 MapReduce 方式并行导出 core.heapsnapshot 文件，
+
+```bash
+$andb -g -c core.<pid> -m snapshot -j 16
+...
+Merging snapshot.d/snapshot_23.rec
+LoadFile() takes 7.145 second(s).
+Merge() takes 1.831 second(s).
+Polling done.
+Resolve all edges ...
+Done, resolved 4162, failed 0.
+Total Entry(7782138), Edge(31256137)
+heap snapshot written to 'core.heapsnapshot'
+ReduceGenerate() takes 766.309 second(s).
+real   811.173s
+map    22.984s
+parse  385.541s
+reduce 402.648s
+```
 
 #### v8 inspect \<tag\>
 

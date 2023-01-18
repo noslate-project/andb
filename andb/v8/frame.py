@@ -261,11 +261,13 @@ class StandardFrame(StackFrame, StandardFrameConstants):
 
     def GetParameter(self, index):
         off = self.GetParameterOffset(index)
-        return Object(self.LoadPtr(off))
+        v = Object(self.LoadPtr(off))
+        return v
 
     def GetParameterOffset(self, index):
         fn = self._function
         param_count = fn.shared_function_info.parameter_count
+        #print("param_count(%d)" % param_count, "%x" % fn)
         assert -1 <= index < param_count
         offset = (param_count - index - 1) * Internal.kSystemPointerSize
         return self.caller_sp__offset + offset

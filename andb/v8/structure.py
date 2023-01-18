@@ -111,7 +111,10 @@ class Isolate(Struct):
             space = heap.getSpace(name)
             chunks = space.getChunks()
             for i in chunks:
-                ChunkBlock.AddChunk(i)
+                try:
+                    ChunkBlock.AddChunk(i)
+                except Exception as e:
+                    print('AddChunk %x failed, %s' % (i, e))
         print("Done ChunkCache, %d chunks cached." % ChunkBlock.CacheSize())
 
     def Heap(self):

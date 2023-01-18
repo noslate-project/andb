@@ -10,6 +10,7 @@ del _
 
 import os
 import sys
+import signal
 
 print(os.path.abspath(__file__))
 dirname, filename = os.path.split(__file__)
@@ -71,7 +72,26 @@ args, dbg_opts = parser.parse_known_args()
 #print('gdb:', args.gdb, 'lldb:', args.lldb,
 #  'core:', args.core, 'binary:', args.binary, 'opts:', args.opts)
 
-print(args)
+
+# leader the new process group
+os.setpgrp()
+
+def Abort():
+    print("Aborted, killall sub-processes.")
+    os.killpg(0, 9)
+
+# register signal
+def term_handler(signo, frame):
+    print('')
+    print("Received Signal(%d)" % signo)
+    Abort()
+
+signal.signal(signal.SIGINT, term_handler)
+signal.signal(signal.SIGTERM, term_handler)
+
+# node and node.typ path
+binary = None
+typfile = None
 
 def GetLoader(andb_dir):
     if args.gdb:
@@ -79,9 +99,6 @@ def GetLoader(andb_dir):
     elif args.lldb:
         return LldbLoader(andb_dir)
     return None
-
-binary = None
-typfile = None
 
 if args.binary:
     """ use specified binary
@@ -109,44 +126,38 @@ elif args.core:
 
 def IndexProcess(size):
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce index %d'%size]
-    cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
     loader.SetCore(args.core)
     loader.BatchOn()
-    loader.AddCommands(cmds)
+    loader.AddCommandFile('%s/init/pre_mapreduce.cmd'%andb_dir)
+    loader.AddCommandLine('mapreduce index %d'%size)
     opts = loader.Opts()
-    os.system(" ".join(opts)) 
-    return opts
+    os.spawnvp(os.P_WAIT, opts[0], opts)
 
 def SnapProcess(index):
     print("my index is %d" % index)
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce snapshot %d' % index]
-    cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
     loader.SetCore(args.core)
     loader.BatchOn()
-    loader.AddCommands(cmds)
+    loader.AddCommandFile('%s/init/pre_mapreduce.cmd'%andb_dir)
+    loader.AddCommandLine('mapreduce snapshot %d'%index)
     opts = loader.Opts()
-    os.system(" ".join(opts)) 
-    return opts
+    os.spawnvp(os.P_WAIT, opts[0], opts)
 
 def ReduceProcess(concurrency):
     loader = GetLoader(andb_dir)
-    cmds = ['iso g p', 'mapreduce reduce']
-    cmds = [x.split() for x in cmds]
     loader.SetExec(binary)
     loader.SetTyp(typfile)
     loader.SetCore(args.core)
     loader.BatchOn()
-    loader.AddCommands(cmds)
+    loader.AddCommandFile('%s/init/pre_mapreduce.cmd'%andb_dir)
+    loader.AddCommandLine('mapreduce reduce')
     opts = loader.Opts()
-    os.system(" ".join(opts)) 
-    return opts
-
+    os.spawnvp(os.P_WAIT, opts[0], opts)
+    
 def MapReduce():
     from multiprocessing import Process, Pool
     from time import time
@@ -157,16 +168,15 @@ def MapReduce():
     if args.jobs:
         concurrency = args.jobs
 
-    # map 
     p = Process(target=IndexProcess, args=(100,))
     p.start()
     p.join()
     t1 = time()
+    print("IndexProcesses done.")
 
-    # reduce
     reduce_process = Process(target=ReduceProcess, args=(concurrency,))
     reduce_process.start()
-    
+
     maps = [] 
     for f in os.listdir("snapshot.d"):
         if f.endswith(".map"):
@@ -175,13 +185,25 @@ def MapReduce():
     maps.sort()
     print(maps)
 
-    # parse
-    pool = Pool(processes=concurrency) 
-    [ pool.apply_async(SnapProcess, (i,)) for i in maps ]
+    pool = Pool(processes=concurrency)
+    results = [ pool.apply_async(SnapProcess, (i,)) for i in maps ]
     pool.close()
     pool.join()
     t2 = time()
+    print("SnapshotProcesses all done.")
 
+    failed = False
+    for i in maps:
+        if not os.path.exists("snapshot.d/snapshot_%d.rec" % i):
+            print("Job map_%d failed." % i)
+            failed = True
+
+    if failed:
+        print("ReduceProcess not satisfied.")
+        Abort()
+        assert 0
+
+    print("Wait ReduceProcess to complete ...")
     reduce_process.join()
     t3 = time()
 
@@ -210,8 +232,9 @@ else:
     if args.args and len(args.args) > 0:
         loader.AddArgs(args.args)
     if args.cmds and len(args.cmds) > 0:
+        print(args.cmds)
         loader.AddCommands(args.cmds)
 
     opts = loader.Opts() 
-    os.system(" ".join(opts))
+    os.spawnvp(os.P_WAIT, opts[0], opts)
 

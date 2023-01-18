@@ -62,21 +62,25 @@ class Loader(object):
     def AddArgs(self, args):
         if self._args is None:
             self._args = []
-        print(args)
+        #print(args)
         self._args.extend(args)
+
+    def AddCommandLine(self, l):
+        self.AddCommands([l.split()])
+
+    def AddCommandFile(self, f):
+        self.AddCommands([[FileWrap(f)]])
 
     def AddCommands(self, cmds):
         if self._commands is None:
             self._commands = []
         for a in cmds:
-            print (a)
+            #print(a)
             if isinstance(a[0], FileWrap):
                 cmd = a[0]
             else:
-                cmd = " ".join(a)
+                cmd = a
             self._commands.append(cmd)
-        for i in self._commands:
-            print(i)
 
     def default(self):
         raise NotImplementedError
@@ -96,8 +100,8 @@ class GdbLoader(Loader):
         return ['gdb', 
             '--nh',  # no ~/.gdbinit
             '--nx',  # no .gdbinit 
-            '-ix %s/init/gdbinit.cmd' % self._andb_dir,  # gdbinit commands
-            '-x %s/init/gdbinit.py' % self._andb_dir,    # gdbinit python script
+            '-ix', '%s/init/gdbinit.cmd' % self._andb_dir,  # gdbinit commands
+            '-x', '%s/init/gdbinit.py' % self._andb_dir,    # gdbinit python script
            ]
 
     def Opts(self):
@@ -106,13 +110,13 @@ class GdbLoader(Loader):
             opts.append(self._exec)
         
         if self._core:
-            opts.append('--core %s' % self._core)
+            opts.extend(['--core', '%s' % self._core])
         
         if self._typ:
             os.environ['ANDB_TYP'] = self._typ 
 
         if self._pid:
-            opts.append('--pid %d' % self._pid)
+            opts.extend(['--pid', '%d' % self._pid])
 
         if self._is_batch:
             opts.append('--batch')
@@ -120,9 +124,9 @@ class GdbLoader(Loader):
         if self._commands:
             for i in self._commands:
                 if isinstance(i, FileWrap):
-                    opts.append("-x '%s'" % i.FileName())
+                    opts.extend(["-x", '%s' % i.FileName()])
                 else:
-                    opts.append("-ex '%s'" % i)
+                    opts.extend(["-ex", " ".join(i)])
         
         if self._args:
             opts.extend(self._args)
@@ -139,8 +143,8 @@ class LldbLoader(Loader):
     def default(self):
         return ['lldb', 
             '-x',  # no any .lldbinit
-            '-o "com sc im %s/init/lldbinit.py"' % self._andb_dir,  # lldbinit python script
-            '-s %s/init/lldbinit.cmd' % self._andb_dir,             # lldbinit command
+            '-o', "com sc im %s/init/lldbinit.py" % self._andb_dir,  # lldbinit python script
+            '-s', "%s/init/lldbinit.cmd" % self._andb_dir,             # lldbinit command
            ]
 
     def Opts(self):
@@ -160,14 +164,13 @@ class LldbLoader(Loader):
         if self._commands:
             for i in self._commands:
                 if isinstance(i, FileWrap):
-                    opts.append("-s '%s'" % i.FileName())
+                    opts.extend(["-s", "%s" % i.FileName()])
                 else:
-                    opts.append("-o '%s'" % i)
+                    opts.extend(["-o", " ".join(i)])
  
         if self._args:
             opts.extend(self._args)
         
         print(opts)
         return opts
-
 
