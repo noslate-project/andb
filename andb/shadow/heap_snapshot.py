@@ -1920,7 +1920,7 @@ class HeapSnapshot(GraphHolder):
         for p in pages:
             page = v8.MemoryChunk(p)
             cnt = cnt + 1
-            print("map_%d (%d/%d) page(0x%x)" % (index, cnt, len(pages), page))
+            print("map_%d (%d/%d) page(0x%x)" % (index, cnt, len(pages), int(page)))
             for obj in page.walk():
                 # skip free space
                 if v8.InstanceType.isFreeSpace(obj.instance_type) and \

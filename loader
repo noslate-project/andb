@@ -72,26 +72,18 @@ args, dbg_opts = parser.parse_known_args()
 #print('gdb:', args.gdb, 'lldb:', args.lldb,
 #  'core:', args.core, 'binary:', args.binary, 'opts:', args.opts)
 
-
-# leader the new process group
-os.setpgrp()
+# node and node.typ path
+binary = None
+typfile = None
 
 def Abort():
     print("Aborted, killall sub-processes.")
     os.killpg(0, 9)
 
-# register signal
 def term_handler(signo, frame):
     print('')
     print("Received Signal(%d)" % signo)
     Abort()
-
-signal.signal(signal.SIGINT, term_handler)
-signal.signal(signal.SIGTERM, term_handler)
-
-# node and node.typ path
-binary = None
-typfile = None
 
 def GetLoader(andb_dir):
     if args.gdb:
@@ -133,7 +125,7 @@ def IndexProcess(size):
     loader.AddCommandFile('%s/init/pre_mapreduce.cmd'%andb_dir)
     loader.AddCommandLine('mapreduce index %d'%size)
     opts = loader.Opts()
-    os.spawnvp(os.P_WAIT, opts[0], opts)
+    return os.spawnvp(os.P_WAIT, opts[0], opts)
 
 def SnapProcess(index):
     print("my index is %d" % index)
@@ -145,6 +137,7 @@ def SnapProcess(index):
     loader.AddCommandFile('%s/init/pre_mapreduce.cmd'%andb_dir)
     loader.AddCommandLine('mapreduce snapshot %d'%index)
     opts = loader.Opts()
+    #os.execp(opts[0], opts)
     os.spawnvp(os.P_WAIT, opts[0], opts)
 
 def ReduceProcess(concurrency):
@@ -212,15 +205,22 @@ def MapReduce():
     print('parse  {:.3f}s'.format(t2-t1))
     print('reduce {:.3f}s'.format(t3-t2))
 
-# map reduce mode
-if args.mode:
-    MapReduce()
-    exit(0)
+if __name__ == '__main__':
+    # leader the new process group
+    os.setpgrp()
+    signal.signal(signal.SIGINT, term_handler)
+    signal.signal(signal.SIGTERM, term_handler)
 
-# single process mode
-else:
+    # map reduce mode
+    if args.mode:
+        MapReduce()
+        exit(0)
+
     loader = GetLoader(andb_dir)
+    if loader is None:
+        exit(0)
 
+    # single process mode
     if binary: 
         loader.SetExec(binary)
     if args.core:
