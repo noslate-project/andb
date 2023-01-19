@@ -22,31 +22,42 @@ from andb.loader import FileWrap, GdbLoader, LldbLoader
 import argparse
 
 loader_desc = """
-Alinode Debugger Loader
+Alibaba Noslate Debugger Loader
 
 A better experience for any node.js developers.
 
-1) auto download binary (but not start a debugger session)
-   andb can auto download the matched binary and typ file from remote. 
-     
-    andb -c core
-
-2) debug only a corefile using lldb
-   (imply auto download binary, if found)
+1) Debugging a corefile using lldb/gdb, 
+    
     andb -l -c core
+    andb -g -c core
+    
+    -l, --lldb : choose lldb for debugging
+    -g, --gdb  : choose gdb for debgging
+    -c, --core : corefile path 
 
-3) debug a corefile with local binary
-    andb -l node -c core
-
-4) start a new process
-    andb -l node
-
-5) debug a live process
+2) Debug a live process, 
+    
     andb -l -p <pid>
+    
+    -p, --pid : pid of living process
 
-choose your favourite debugger:
-  andb -g or --gdb     : request a gdb console.
-  andb -l or --lldb    : request a lldb console.
+3) Batch debugging,
+
+    andb -l -c core -b -xf export_snapshot.cmd
+    andb -l -c core -b -x iso g p
+    
+    -b, --batch : batch mode
+    -xf, --command-file : command from file
+    -x, --command : command from line
+
+    -x and -xf can be used multiple times and in conjunction. 
+
+4) Export core.heapsnapshot by MapReduce,
+
+    andb -l -c core -m snapshot -j 4
+
+    -m  : --mode, MapReduce mode.
+    -j  : --jobs, allow N jobs at once.
 
 """
 
@@ -216,11 +227,13 @@ if __name__ == '__main__':
         MapReduce()
         exit(0)
 
-    loader = GetLoader(andb_dir)
-    if loader is None:
+    if binary is None and \
+        args.core is None and \
+        args.pid is None:
         exit(0)
 
     # single process mode
+    loader = GetLoader(andb_dir)
     if binary: 
         loader.SetExec(binary)
     if args.core:
