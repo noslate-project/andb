@@ -31,9 +31,9 @@ A better experience for any node.js developers.
     andb -l -c core
     andb -g -c core
     
-    -l, --lldb : choose lldb for debugging
+    -l, --lldb : choose lldb for debugging (default)
     -g, --gdb  : choose gdb for debgging
-    -c, --core : corefile path 
+    -c, --core : path to corefile 
 
 2) Debug a live process, 
     
@@ -99,9 +99,7 @@ def term_handler(signo, frame):
 def GetLoader(andb_dir):
     if args.gdb:
         return GdbLoader(andb_dir)
-    elif args.lldb:
-        return LldbLoader(andb_dir)
-    return None
+    return LldbLoader(andb_dir)
 
 if args.binary:
     """ use specified binary
