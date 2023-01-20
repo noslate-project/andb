@@ -94,6 +94,16 @@ class AllocationSpace(Enum):
             cls.NEW_SPACE,
         ]
 
+    @classmethod
+    def OnlyOldSpaces(cls):
+        return [
+            cls.MAP_SPACE,
+            cls.CODE_SPACE,
+            cls.CODE_LO_SPACE,
+            cls.OLD_SPACE,
+            cls.LO_SPACE,
+        ]
+
 
 class AllocationType(Enum):
     _typeName = "v8::internal::AllocationType"

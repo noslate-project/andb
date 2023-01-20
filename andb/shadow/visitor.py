@@ -18,9 +18,11 @@ class IsolateGuesser:
     """
    
     def SetIsolate(self, pyo_iso):
-        v8.Isolate.SetCurrent(v8.Isolate(pyo_iso))
+        iso = v8.Isolate(pyo_iso)
+        v8.Isolate.SetCurrent(iso)
         # set convenience_variable
         dbg.ConvenienceVariables.Set('isolate', pyo_iso._I_value)
+        #iso.MakeChunkCache()
 
     def CheckIsolate(self, address):
         try:
@@ -651,5 +653,80 @@ class TestVisitor(object):
         heap = iso.Heap()
         space = heap.getSpace('old')
         
+    @classmethod
+    def ValueTest(cls, argv):
+        from time import time
+        import struct
+        #iso = v8.Isolate.GetCurrent()
+        #heap = iso.Heap()
+        tag = int(argv[0], 16)
+        ptr = tag & ~v8.Internal.kHeapObjectTagMask 
 
+        buf = dbg.Target.MemoryRead(ptr, 80)
+
+        t = time()
+        for i in range(1000000):
+            o = ptr 
+        print("for %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            o = object() 
+        print("object() %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            o = v8.HeapObject(tag)
+        print("HeapObject() %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            r = v8.ChunkBlock() 
+            r.InitReader(ptr)
+        print("ChunkBlock() %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            r = v8.ChunkBlock() 
+            r.InitReader(ptr)
+            o = r.LoadU64(0)
+        print("ChunkBlock().LoadU64 %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            o = v8.HeapObject(tag)
+            m = o.instance_type
+        print("HeapObject.instance_type %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            o = dbg.Block()
+            o._address = ptr
+        print("dbg.Block %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            o = dbg.Block()
+            o._address = ptr
+            m = o.LoadU64(0)
+        print("dbg.Block.LoadU64 %.3f" % (time()-t))
+
+        t = time()
+        for i in range(1000000):
+            m = struct.unpack_from("Q", buf, 0)
+        print("struct.unpack %.3f" % (time()-t))
+
+    @profiler
+    def SingleValue(self, argv):
+        from time import time
+        #iso = v8.Isolate.GetCurrent()
+        #heap = iso.Heap()
+        tag = int(argv[0], 16)
+        ptr = tag & ~v8.Internal.kHeapObjectTagMask 
+
+        count = 1000000
+        t = time()
+        for i in range(count):
+            o = v8.HeapObject(tag)
+        print("HeapObject() %.3f" % (time()-t))
 

@@ -187,3 +187,10 @@ def DCHECK(statement, *args):
     """
     assert statement, args 
 
+def to_bool(value):
+    """ convert string to bool
+    """
+    if str(value).lower() in ("yes", "on", "y", "true", "1"): return True
+    if str(value).lower() in ("no",  "off", "n", "false", "0", "0.0", "", "none"): return False
+    raise Exception('Invalid value for boolean conversion: ' + str(value)) 
+

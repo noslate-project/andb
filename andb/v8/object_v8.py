@@ -203,7 +203,13 @@ class ScopeInfo(FixedArray):
         """ index to offset
         """
         return self.kFlagsOffset + (index * Internal.kTaggedSize)
-    
+ 
+    @property
+    def is_empty(self):
+        if self.length == 0:
+            return True
+        return False
+   
     @property
     def has_saved_class_variable_index(self):
         return self.flags.has_saved_class_variable_index
@@ -312,7 +318,7 @@ from .enum import (
     IsStaicFlag,
 )
 
-from .struct import (
+from .structure import (
     Isolate,
 )
 

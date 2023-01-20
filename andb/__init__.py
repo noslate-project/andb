@@ -36,4 +36,4 @@ def Load():
     t2 = time()
     print("andb loaded, cost %0.3f seconds." % (t2 - t1))
 
-print("andb.__init__ end")
+#print("andb.__init__ end")

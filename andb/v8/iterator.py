@@ -738,7 +738,7 @@ from .enum import (
     PropertyKind,
     PropertyLocation,
 )
-from .struct import (
+from .structure import (
     PagedSpace, 
     MemoryChunk,
     RootsTable,

@@ -1,8 +1,13 @@
 
 from __future__ import print_function, division
 
+import os
 import time
 import json
+try:
+    import cPickle as pickle
+except:
+    import pickle
 
 import andb.dbg as dbg 
 import andb.v8 as v8
@@ -17,7 +22,18 @@ import andb.py23 as py23
 
 testNames=None
 
-class HeapGraphEdge(object):
+class Picklable(object):
+
+    def __getstate__(self):
+        a = dict([(k, getattr(self,k,None)) for k in self.__slots__])
+        #print(a)
+        return a
+
+    def __setstate__(self, data):
+        for k,v in data.items():
+            setattr(self,k,v)
+
+class HeapGraphEdge(Picklable):
     """ HeapGraphEdge representa a edge between two HeapEntries.
         
     """
@@ -30,14 +46,14 @@ class HeapGraphEdge(object):
     kShortcut = 5
     kWeak = 6
 
-    __slots__ = ["_snapshot", "to_entry_", "from_entry_", "type_", "index_", "name_" ]
+    __slots__ = ["to_entry_", "from_entry_", "type_", "index_or_name_"]
     
     """
     edges consums lots of memory.
     """
     def __init__(self, snapshot):
         # the snapshot it belongs to
-        self._snapshot = snapshot
+        #self._snapshot = snapshot
         # edge to object
         self.to_entry_ = None
         # edge from index (object index)
@@ -45,9 +61,9 @@ class HeapGraphEdge(object):
         # type above
         self.type_ = -1
         # index of the edge, (either index or name) 
-        self.index_ = 0
-        # name of the edge
-        self.name_ = None
+        #self.index_ = 0
+        # index or name of the edge, None for uninialized
+        self.index_or_name_ = None
 
     @property
     def to_entry(self):
@@ -63,7 +79,7 @@ class HeapGraphEdge(object):
     def index(self):
         t = self.type
         if t == self.kElement or t == self.kHidden:
-            return self.index_
+            return int(self.index_or_name_)
         return None
 
     def name(self):
@@ -73,13 +89,17 @@ class HeapGraphEdge(object):
            t == self.kInternal or \
            t == self.kShortcut or \
            t == self.kWeak:
-            return self.name_
+            return self.index_or_name_
         return None
 
-    def DebugPrint(self):
-        print(self.type_, self.index_, self.name_, self.to_entry_, self.from_entry_)
+    def __str__(self):
+        return "edge: type(%d), index_or_name(%s), to(%s), from(%s)" % (self.type_, self.index_or_name_, self.to_entry_, self.from_entry_)
 
-class HeapEntry(object):
+    def DebugPrint(self):
+        log.print(str(self))
+
+
+class HeapEntry(Picklable):
 
     # Type from 'HeapGraphNode'
     kHidden = 0
@@ -114,10 +134,10 @@ class HeapEntry(object):
         kBigInt: '/bigint/',
     }
 
-
-    __slots__ = ["_snapshot", "type_", "index_", "self_size_", "id_", "name_", "trace_node_id_", "children_count_", "children_end_count_" ]
+    __slots__ = ["type_", "index_", "self_size_", "id_", "name_", "mem_addr_", "children_count_", "children_end_count_" ]
+    
     def __init__(self, snapshot):
-        self._snapshot = snapshot
+        #self._snapshot = snapshot
 
         # keep as same as C++ code, with "_" tail
         # HeapGraphNode type
@@ -136,7 +156,10 @@ class HeapEntry(object):
         self.name_ = None
 
         # not used for now
-        self.trace_node_id_ = 0
+        #self.trace_node_id_ = 0
+
+        # memory address 
+        self.mem_addr_ = 0
 
         # edges count
         self.children_count_ = 0
@@ -144,52 +167,45 @@ class HeapEntry(object):
         # edges end index
         self.children_end_count_ = 0
 
-    @property
-    def snapshot(self):
-        return self._snapshot
-
-    def SetIndexedReference(self, typ, index, child):
+    def SetIndexedReference(self, snap, typ, index, child):
         assert typ == HeapGraphEdge.kElement or typ == HeapGraphEdge.kHidden
         self.children_count_ += 1
-        self.snapshot.AddEdge(typ, int(index), self, child)
-        log.debug("SetIndexedReference: type(%d), index(%d), entry(%d)" % (typ, index, child.id_))
+        snap._AddEdge(typ, int(index), self, child)
+        #log.debug("SetIndexedReference: type(%d), index(%d), entry(%d)" % (typ, index, child.id_))
 
-    def SetNamedReference(self, typ, name, child):
+    def SetNamedReference(self, snap, typ, name, child):
         assert typ != HeapGraphEdge.kElement and typ != HeapGraphEdge.kHidden
         self.children_count_ += 1
-        self.snapshot.AddEdge(typ, str(name), self, child)
-        log.debug("SetNamedReference: type(%d), name(%s), entry(%d)" % (typ, name, child.id_))
+        snap._AddEdge(typ, str(name), self, child)
+        #log.debug("SetNamedReference: type(%d), name(%s), entry(%d)" % (typ, name, child.id_))
 
-    #def SetReference(self, typ, name_or_index, child_entry):
-    #    if isinstance(name_or_index, str):
-    #        self.snapshot.AddEdge(typ, str(name_or_index), self, child_entry)
-    #    elif isinstance(name_or_index, int):
-    #        self.snapshot.AddEdge(typ, int(name_or_index), self, child_entry)
-    #    else:
-    #        raise Exception
-    #    self.children_count_ += 1
-
-    def SetIndexedAutoIndexReference(self, typ, child_entry):
+    def SetIndexedAutoIndexReference(self, snap, typ, child_entry):
         # heap snapshot count array from 1.
         index = self.children_count_ + 1
-        self.SetIndexedReference(typ, index, child_entry)
+        self.SetIndexedReference(snap, typ, index, child_entry)
     
-    def SetNamedAutoIndexReference(self, typ, desc, child_entry):
+    def SetNamedAutoIndexReference(self, snap, typ, desc, child_entry):
         index = self.children_count_ + 1
         if isinstance(desc, str) and len(desc) > 0:
             name = "%d / %s" % (index, desc)
         else:
             name = "%d" % index
         #print("SetNamedAutoIndexReference", name, typ)
-        self.SetNamedReference(typ, name, child_entry)
+        self.SetNamedReference(snap, typ, name, child_entry)
 
     def set_children_index(self, index):
         next_index = index + self.children_count_
         self.children_end_count_ = index
         return next_index
 
+    def GetRealEntry(self):
+        return self
+
+    def GetLastEntry(self):
+        return self
+
     def DebugPrint(self):
-        log.debug("type(%s), id(%s), child(%d), size(%s), name(%s)" % (self.type_, self.id_, self.children_count_, self.self_size_, self.name_.encode('unicode_escape')))
+        log.print("node: type(%s), id(%s), child(%d), size(%s), name(%s)" % (self.type_, self.id_, self.children_count_, self.self_size_, self.name_.encode('unicode_escape')))
 
     def TypeAsString(self):
         """ return type's string
@@ -199,7 +215,59 @@ class HeapEntry(object):
             return type_strings[root_type]
         return "???"
 
-class SourceLocation(object):
+    def __str__(self):
+        return "<Entry %s>" % (self.name_.encode('unicode_escape'))
+
+class LazyEntry(Picklable):
+    __slots__ = ['real_entry_']
+
+    def __init__(self):
+        # Unresolved HeapEntry should be None
+        self.real_entry_ = None 
+
+    def GetRealEntry(self):
+        """ Get Last HeapEntry,
+            return None if not exists.
+        """
+        next_entry = self.real_entry_
+        while next_entry is not None:
+            if isinstance(next_entry, HeapEntry):
+                return next_entry
+            next_entry = next_entry.real_entry_
+        return None
+
+    def GetLastEntry(self):
+        """ Return Last Entry in list,
+            return self if only One entry in list.
+        """
+        if self.real_entry_ is None:
+            return self
+
+        last_entry = self.real_entry_
+        
+        while True:
+            if isinstance(last_entry, HeapEntry):
+                return last_entry
+            
+            if last_entry.real_entry_ is None:
+                return last_entry
+            
+            last_entry = next_entry.real_entry_
+
+    def SetRealEntry(self, entry):
+        """ Set entry to last of list.
+        """
+        last_entry = self.GetLastEntry()
+        assert isinstance(last_entry, LazyEntry)
+        last_entry.real_entry_ = entry
+
+    #def __str__(self):
+    #    if self.real_entry_ is None:
+    #        return "<LazyEntry None>"
+    #    return "<LazyEntry %s>" % (self.real_entry_)
+
+
+class SourceLocation(Picklable):
     __slots__ = ["_entry", "_id", "_line", "_col"]
 
     def __init__(self, entry, script_id, line, col):
@@ -275,36 +343,23 @@ class ProgressCounter:
         self._size = 0;
 
 
-class HeapSnapshot:
-
+class GraphHolder(object):
+   
     # id 
     kObjectIdStep = 2
 
     def __init__(self):
-       
+
+        # current isolate
         self._isolate = v8.Isolate.GetCurrent()
         if self._isolate is None:
             print("isolate is not set.")
             raise Exception
- 
-        #self._size = 0
-        #self._cnt = 0
-
+        
         # uniq next ObjectId
         self._next_id = 0
-
-        # root_entry is the root entry for any object
-        self.root_entry_ = None
-
-        # gc_roots_entry is the root entry for all GC Subroots
-        self.gc_roots_entry_ = None
-
-        # each GC_Root has a entry for children (root to entry) 
-        self.gc_subroot_entries_ = [] 
-
-        """ core data storage
-        """
-        # holds all objects
+        
+        # holds all objects resolved
         self.entries_ = []
 
         # holds all edges
@@ -313,23 +368,8 @@ class HeapSnapshot:
         # holds the location info
         self.locations_ = []
 
-        # holds all names the snapshot has 
-        self.names_ = {}
-
-        """ caches 
-        """
-        # all edges belongs to HeapEntry, flat list
-        self.children_ = []
-
-        # map for HeapObject adddress to HeapEntry (ptr to entry)
+        # address to HeapEntry or LazyEntry map 
         self.entries_map_ = {}
-
-        # map for Root address to Root Name (ptr to string)
-        self.strong_gc_subroot_names_ = {} 
-
-        """ counter
-        """
-        self._progress_counter = ProgressCounter(self)
 
     @property
     def id(self):
@@ -337,48 +377,112 @@ class HeapSnapshot:
         i = self._next_id
         # from HeapObjectsMap::kObjectIdStep
         self._next_id += self.kObjectIdStep 
-        return i 
+        return i
 
-    def root(self):
-        return self.root_entry_
+    def _AddEntry(self, typ, name, size, addr, object_id = -1):
+        """ add HeapEntry to self.entries_ 
 
-    def gc_roots(self):
-        return self.gc_roots_entry_
-
-    def gc_subroot(self, index):
-        """ return the GC_ROOT by index """
-        return self.gc_subroot_entries_[index]
-
-    def heap(self):
-        """ return the Heap object(py) """
-        return self._isolate.Heap()
-
-    def initRootNames(self):
-        """ init the root name table """
-        root_index = self._isolate.Roots()
-        for i in range(v8.RootIndex.kFirstStrongOrReadOnlyRoot, v8.RootIndex.kLastStrongOrReadOnlyRoot):
-            ptr = int(root_index.root(i))
-            name = root_index.Name(i)
-            log.debug("[%d] <0x%x> %s" % (i, ptr, name))
-            self.strong_gc_subroot_names_[ptr] = name
-
-    def RootName(self, addr):
-        """ return root name of the addr if it was """
-        if addr in self.strong_gc_subroot_names_:
-            return self.strong_gc_subroot_names_[addr]
-        return None
-    
-    def FindOrAddEntry(self, address, size, accessed=True):
-        """ get entry for the address
+        arguments,
+            typ: is one of HeapEntry.kXXX
+            name: tagged name of the object 
+            id : uniq object id 
+            self_size : only self node size
+            mem_addr : HeapObject memory address
         """
-        # return the HeapEntry in map
-        if address in self.entries_map_:
-            return self.entries_map_[address]
-        
-        # create a new
+        # print(typ, name, size, addr, object_id)
+        if isinstance(name, py23.string_types) or \
+                isinstance(name, py23.text_type):
+            pass
+        elif isinstance(name, py23.binary_type):
+            name = name.decode('utf8')
+        else:
+            print(type(name), name)
+            raise Exception
 
-    def GetEntry(self, tag):
-        """ get (or create) HeapEntry by HeapObject 
+        if object_id <= 0:
+            object_id = self.id
+        e = HeapEntry(self)
+        e.index_ = len(self.entries_)
+        e.type_ = typ
+        e.name_ = name
+        e.self_size_ = size
+        e.mem_addr_ = addr 
+        e.id_ = object_id
+        #e.DebugPrint()
+        #if typ == 3 and len(name) == 0:
+        #    raise Exception('name is blank')
+        #log.debug("_AddEntry: type(%d), id(%d), size(%d)" % (typ, object_id, size))
+        self.entries_.append(e)
+        return e
+    
+    def _AddEdge(self, edge_type, name_or_index, entry, child):
+        """ new HeapGraphEdge for self.edges_
+
+        arg:
+          edge_type: the type of the Edge defined in HeapGraphEdge
+          name_or_index : edge name or index
+          entry : parent HeapEntry (from)
+          child : child HeapEntry (to)
+        """
+        e = HeapGraphEdge(self)
+        e.type_ = edge_type
+        #if isinstance(name_or_index, str):
+            # is string
+        #    e.name_ = name_or_index
+        #else:
+        #    e.index_ = name_or_index
+
+
+        e.index_or_name_ = name_or_index
+        e.from_entry_ = entry
+        e.to_entry_ = child
+
+        self.edges_.append(e)
+        #e.DebugPrint()
+        return e
+
+    def AddLazyEntry(self, obj):
+        assert isinstance(obj, v8.HeapObject)
+        ptr = obj.address
+
+        assert ptr not in self.entries_map_
+        entry = LazyEntry()
+        self.entries_map_[ptr] = entry
+        return entry
+
+    def AddDummyEntry(self, obj):
+        addr = obj.address 
+        # allocate a new object id
+        entry = self._AddEntry(HeapEntry.kHidden, "dummy", 0, addr)
+        self.AddMapHeapEntry(addr, entry)
+        return entry
+
+    def GetHeapEntry(self, tag):
+        """ get (or create) an HeapEntry
+
+        """
+        if isinstance(tag, v8.HeapObject):
+            obj = tag
+        else:
+            # assume not a HeapObject, check it
+            obj = v8.HeapObject(int(tag))
+            if not obj.IsHeapObject():
+                log.warn("not a heapObject 0x%x" % obj)
+                return None
+
+        # get address(pointer)
+        ptr = obj.address
+
+        # return cached entry
+        entry = self.FindMapHeapEntry(ptr)
+        if entry is not None:
+            return entry
+
+        # Add New HeapEntry from HeapObject (maybe None)
+        return self.AddEntryObject(obj)
+
+    def GetEntryOrLazy(self, tag):
+        """ Get tag HeapEntry or a LazyEntry should be created.
 
         """
         if isinstance(tag, v8.HeapObject):
@@ -398,67 +502,8 @@ class HeapSnapshot:
             log.debug("Found <0x%x> Entry." % ptr)
             return self.entries_map_[ptr]
 
-        # Add New HeapEntry from HeapObject (maybe None)
-        return self.AddEntryObject(obj)
-
-    def FindMapEntry(self, addr):
-        """ find by address
-            
-            Return,
-              None: not found,
-              entry: HeapEntry found
-        """
-        if addr in self.entries_map_:
-            return self.entries_map_[addr] 
-        return None
-
-    def AddMapEntry(self, addr, entry):
-        """ Add HeapEntry to (addr to entry) map 
-            Return,
-             None: if already exists
-             entry: inserted
-        """
-        if addr in self.entries_map_:
-            return None
-        self.entries_map_[addr] = entry
-        return entry
-
-    def _AddEntry(self, typ, name, size, trace_node_id, object_id = -1):
-        """ add HeapEntry to self.entries_ 
-
-        arguments,
-            typ: is one of HeapEntry.kXXX
-            name: tagged name of the object 
-            id : uniq object id 
-            self_size : only self node size
-            trace_node_id : not used, always 0
-        """
-        # print(typ, name, size, trace_node_id, object_id)
-        if isinstance(name, py23.string_types) or \
-                isinstance(name, py23.text_type):
-            pass
-        elif isinstance(name, py23.binary_type):
-            name = name.decode('utf8')
-        else:
-            print(type(name), name)
-            raise Exception
-
-        if object_id <= 0:
-            object_id = self.id
-        e = HeapEntry(self)
-        e.index_ = len(self.entries_)
-        e.type_ = typ
-        e.name_ = name
-        e.self_size_ = size
-        e.trace_node_id_ = trace_node_id
-        e.id_ = object_id
-        #e.DebugPrint()
-        #if typ == 3 and len(name) == 0:
-        #    raise Exception('name is blank')
-
-        log.debug("_AddEntry: type(%d), id(%d), size(%d)" % (typ, object_id, size))
-        self.entries_.append(e)
-        return e
+        # Add New LazyEntry
+        return self.AddLazyEntry(obj)
 
     def AddEntryObject(self, obj):
         """ new HeapEntry by HeapObject address
@@ -557,15 +602,13 @@ class HeapSnapshot:
                 raise Exception
         addr = obj.address
 
-        entry = self.FindMapEntry(addr)
-        if not entry is None:
-            #print(hex(addr))
-            #raise Exception
-            #id = entry.id_
-            #entry = self._AddEntry(typ, name, size, 0, object_id = id)
-            if v8.InstanceType.isScript(obj.instance_type):
-                print(entry, entry.name)
-            return entry
+        #assert addr not in self.entries_map_, print(self.entries_map_[addr])
+
+        #entry = self.FindMapEntry(addr)
+        #if not entry is None:
+        #    if v8.InstanceType.isScript(obj.instance_type):
+        #        print(entry, entry.name)
+        #    return entry
         
         def good_name(name):
             if name is None:
@@ -576,40 +619,18 @@ class HeapSnapshot:
                 (addr, typ, good_name(name), size))
             
         # allocate a new object id
-        entry = self._AddEntry(typ, name, size, 0)
-        self.AddMapEntry(addr, entry)
+        entry = self._AddEntry(typ, name, size, addr)
+        self.AddMapHeapEntry(addr, entry)
         return entry
 
-    def TagObject(self, obj, name):
-        entry = self.GetEntry(obj)
-        if entry is None:
-            return None
-
-        if entry.name_ is None or len(entry.name_) == 0:
-            entry.name_ = name
-            log.debug("TagObject: 0x%x as '%s'" % (obj, name))
-
-    def AddEdge(self, type, name_or_index, entry, child):
-        """ new HeapGraphEdge for self.edges_
-
-        arg:
-          type: the type of the Edge defined in HeapGraphEdge
-          name_or_index : edge name or index
-          entry : parent HeapEntry (from)
-          child : child HeapEntry (to)
+    def GetConstructorName(self, jsobj):
+        """ Get Constructor Name for JSObject
         """
-        e = HeapGraphEdge(self)
-        e.type_ = type
-        if isinstance(name_or_index, str):
-            # is string
-            e.name_ = name_or_index
-        else:
-            e.index_ = name_or_index
-        e.from_entry_ = entry
-        e.to_entry_ = child 
-        self.edges_.append(e)
-        #e.DebugPrint()
-        return e
+        t = jsobj.map.instance_type
+        if v8.InstanceType.isJSFunction(t):
+            # TBD: refere from readonly roots.
+            return "(closure)"
+        return jsobj.GetConstructorName()
 
     def GetSystemEntryName(self, obj):
         typ = obj.instance_type
@@ -630,58 +651,208 @@ class HeapSnapshot:
         else:
             return "system / %s" % v8.InstanceType.CamelName(typ)
 
-    #def parseObject(self, obj, *args):
-    #    #print("object at 0x%x" % (obj.address))
-    #    size = obj.Size()
-    #    self._AddEntry(0, "", size, 0)
+    """ Map Entries List API
+        
+        the map list holds the all address to HeapObject mappings.
+
+        FindMapEntry: get the first entry for address.
+        FindMapHeapEntry: get the HeapEntry for address.
+        AddMapEntry: put HeapEntry or LazyEntry to list. 
+        AddMapHeapEntry: put HeapEntry to map list(last in list).
+        AddMapLazyEntry: put LazyEntry to map list(first in list).
+    """
+
+    def FindMapEntry(self, addr):
+        """ find by address
+            
+            Return,
+              None: not found,
+              entry: HeapEntry or LazyEntry found
+        """
+        if addr in self.entries_map_:
+            return self.entries_map_[addr]
+        return None
+
+    def FindMapHeapEntry(self, addr):
+        """ get Real HeapEntry from LazyEntry list.
+            
+            Return:
+              None: no HeapEntry at end of list.
+              HeapEntry: first HeapEntry in list.
+        """
+        next_entry = self.FindMapEntry(addr)
+        while next_entry is not None:
+            if isinstance(next_entry, HeapEntry):
+                return next_entry
+            next_entry = next_entry.real_entry_
+        return None
+
+    def AddMapEntry(self, addr, entry):
+        """ Add Entry to entries map 
+        """
+        if isinstance(entry, HeapEntry):
+            return self.AddMapHeapEntry(addr, entry)
+        return self.AddMapLazyEntry(addr, entry) 
+
+    def AddMapHeapEntry(self, addr, entry):
+        """ Add HeapEntry to MapEntry List
+        """
+        assert isinstance(entry, HeapEntry)
+        if addr not in self.entries_map_:
+            self.entries_map_[addr] = entry
+            return entry
+
+        cur = self.entries_map_[addr]
+        assert isinstance(cur, LazyEntry)
+        while cur is not None:
+            if cur.real_entry_ is None:
+                cur.real_entry_ = entry
+                return entry
+            cur = cur.real_entry_
+        return entry
+
+    def AddMapLazyEntry(self, addr, entry):
+        """ Add LazyEntry to MapEntry List
+        """
+        assert isinstance(entry, LazyEntry)
+        if addr not in self.entries_map_:
+            self.entries_map_[addr] = entry
+            return entry
+        
+        cur = self.entries_map_[addr]
+        entry.real_entry_ = cur
+        self.entries_map_[addr] = entry
+        return entry
+
+
+    """ utility
+    """
+
+    def TagObject(self, obj, name):
+        entry = self.GetHeapEntry(obj)
+        if entry is None:
+            return None
+
+        if entry.name_ is None or len(entry.name_) == 0:
+            entry.name_ = name
+            log.debug("TagObject: 0x%x as '%s'" % (obj, name))
+
+    def CleanAll(self):
+        self.entries_map_.clear()
+        del self.entries_[:]
+        del self.edges_[:]
+        del self.locations_[:]
+
+    def Validity(self):
+        id_map = {}
+        for p,e in self.entries_map_.items():
+            id_map[id(e)] = p
+
+        for i in self.edges_:
+            print(i)
+            from_entry = id(i.from_entry_)
+            to_entry = id(i.to_entry_)
+            print("from: %x, to: %x" % (id_map[from_entry], id_map[to_entry]))
+
+    @profiler
+    def SaveFile(self, filename):
+        """ write data to file.
+        """
+        a = {"entries_map": self.entries_map_,
+             "entries": self.entries_,
+             "edges": self.edges_,
+             "locations": self.locations_}
+
+        with open(filename, 'wb') as f:
+            pickle.dump(a, f, pickle.HIGHEST_PROTOCOL)
+
+    @profiler
+    def LoadFile(self, filename):
+        """ read data from file.
+        """
+        with open(filename, 'rb') as f:
+            a = pickle.load(f)
+
+        self.entries_map_ = a['entries_map']
+        self.entries_ = a['entries']
+        self.edges_ = a['edges']
+        self.locations_ = a['locations']
+
+class ObjectParser(GraphHolder):
+
+    _non_essential_addrs = [] 
+
+    def __init__(self):
+        super(ObjectParser, self).__init__()
+        self.MakeNonEssentialAddrs()
+
+    def MakeNonEssentialAddrs(self):
+        if len(self._non_essential_addrs) > 0:
+            return 
+        
+        ro_heap = self._isolate.ReadOnlyHeap()
+        for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
+            if obj.IsOddball():
+                self._non_essential_addrs.append(obj.address) 
+
+        roots = self._isolate.Roots()
+        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
+        ar = [roots.empty_byte_array,
+            roots.empty_fixed_array,
+            roots.empty_weak_fixed_array,
+            roots.empty_descriptor_array,
+            roots.fixed_array_map,
+            roots.cell_map,
+            roots.global_property_cell_map,
+            roots.shared_function_info_map,
+            roots.free_space_map,
+            roots.one_pointer_filler_map,
+            roots.two_pointer_filler_map]
+        
+        for o in ar:
+            ho = v8.HeapObject(o)
+            self._non_essential_addrs.append(ho.address)
+
+        print("Cache NonEssetialAddress,")
+        for p in self._non_essential_addrs:
+            print(" 0x%x" % p)
+
+    def ExtractObject(self, obj):
+        # obj: HeapObject
+        assert isinstance(obj, v8.HeapObject)
+
+        # skip FreeSpace object
+        if v8.InstanceType.isFreeSpace(obj.instance_type) and \
+            cfg.cfgHeapSnapshotShowFreeSapce == 0:
+            return
+
+        # get the HeapEntry
+        entry = self.GetHeapEntry(obj)
+        
+        # extract reference
+        self.ExtractReferences(entry, obj)
+
+        # reference to map
+        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "map", obj.map)
+
+        # show Tagged Pointer in heapsnapshot 
+        #entry.SetNamedReference(HeapGraphEdge.kInternal, "0x%x" % obj, self.mem_entry_)
+
+        # Extrace Location
+        #self.ExtractLocation(entry, obj)
 
     def AddLocation(self, entry, script, line, col):
         l = SourceLocation(entry, script, line, col)
         self.locations_.append(l)
 
-    def GetConstructorName(self, jsobj):
-        """ Get Constructor Name for JSObject
-        """
-        t = jsobj.map.instance_type
-        if v8.InstanceType.isJSFunction(t):
-            # TBD: refere from readonly roots.
-            return "(closure)"
-        return jsobj.GetConstructorName()
-
-    def SetGcSubrootReference(self, root, desc, is_weak, child_obj):
-        """ puts child_obj to subroot(root)'s reference """
-        child_entry = self.GetEntry(child_obj)
-        if child_entry is None:
-            return
-        # TBD: is_weak
-        name = self.RootName(child_obj.tag)
-        if name is None:
-            self.gc_subroot(root).SetNamedAutoIndexReference(
-                    HeapGraphEdge.kInternal, desc, child_entry)
-        else:
-            self.gc_subroot(root).SetNamedReference(
-                    HeapGraphEdge.kInternal, name, child_entry)
-
-        # TBD: treat global objects as roots
-
     def IsSessentialObject(self, obj):
         """ heapobject, not oddball, not roots.
         """
-        if not obj.IsHeapObject(): return False
-        if obj.IsOddball(): return False
-        roots = self._isolate.Roots()
-        #print(obj, roots.empty_fixed_array, obj == roots.empty_fixed_array)
-        if obj == roots.empty_byte_array: return False
-        if obj == roots.empty_fixed_array: return False
-        if obj == roots.empty_weak_fixed_array: return False
-        if obj == roots.empty_descriptor_array: return False
-        if obj == roots.fixed_array_map: return False
-        if obj == roots.cell_map: return False
-        if obj == roots.global_property_cell_map: return False
-        if obj == roots.shared_function_info_map: return False
-        if obj == roots.free_space_map: return False
-        if obj == roots.one_pointer_filler_map: return False
-        if obj == roots.two_pointer_filler_map: return False
+        #if not obj.IsHeapObject(): return False
+        ptr = obj.address
+        for p in self._non_essential_addrs:
+            if ptr == p:
+                return False
         return True
 
     def SetReferenceValue(self, typ, parent_entry, name_or_index, child_tag):
@@ -705,7 +876,7 @@ class HeapSnapshot:
         if not child_obj.IsHeapObject():
             return
 
-        child_entry = self.GetEntry(child_obj)
+        child_entry = self.GetEntryOrLazy(child_obj)
         assert child_entry is not None, child_obj
 
         if not self.IsSessentialObject(child_obj):
@@ -714,12 +885,12 @@ class HeapSnapshot:
         # based on typeof(name_or_index)
         if isinstance(name_or_index, int):
             raise Exception(name_or_index)
-            parent_entry.SetIndexedReference(typ, name_or_index, child_entry)
+            parent_entry.SetIndexedReference(self, typ, name_or_index, child_entry)
         elif isinstance(name_or_index, str):
-            parent_entry.SetNamedReference(typ, name_or_index, child_entry)
+            parent_entry.SetNamedReference(self, typ, name_or_index, child_entry)
         elif isinstance(name_or_index, unicode):
             name = name_or_index.encode('utf-8')
-            parent_entry.SetNamedReference(typ, name, child_entry)
+            parent_entry.SetNamedReference(self, typ, name, child_entry)
         else:
             print(name_or_index, type(name_or_index))
             raise Exception
@@ -730,10 +901,10 @@ class HeapSnapshot:
         if not child_obj.IsHeapObject():
             return
 
-        child_entry = self.GetEntry(child_obj)
+        child_entry = self.GetEntryOrLazy(child_obj)
         assert child_entry is not None
        
-        parent_entry.SetIndexedReference(typ, name_or_index, child_entry)
+        parent_entry.SetIndexedReference(self, typ, name_or_index, child_entry)
 
     def ExtractReferencesAccessorInfo(self, parent_entry, obj):
         o = v8.AccessorInfo(obj)
@@ -1074,6 +1245,88 @@ class HeapSnapshot:
 
         # TBD: JSObject Constructor
 
+
+class HeapSnapshot(GraphHolder):
+
+    def __init__(self):
+       
+        super(HeapSnapshot, self).__init__()
+
+        #self._size = 0
+        #self._cnt = 0
+
+        # uniq next ObjectId
+        #self._next_id = 0
+
+        # root_entry is the root entry for any object
+        self.root_entry_ = None
+
+        # gc_roots_entry is the root entry for all GC Subroots
+        self.gc_roots_entry_ = None
+
+        # each GC_Root has a entry for children (root to entry) 
+        self.gc_subroot_entries_ = [] 
+
+        """ core data storage
+        """
+        # holds all objects
+        #self.entries_ = []
+
+        # holds all edges
+        #self.edges_ = []
+
+        # holds the location info
+        #self.locations_ = []
+
+        # holds all names the snapshot has 
+        self.names_ = {}
+
+        """ caches 
+        """
+        # all edges belongs to HeapEntry, flat list
+        self.children_ = []
+
+        # map for HeapObject adddress to HeapEntry (ptr to entry)
+        #self.entries_map_ = {}
+
+        # map for Root address to Root Name (ptr to string)
+        self.strong_gc_subroot_names_ = {} 
+
+        """ counter
+        """
+        self._progress_counter = ProgressCounter(self)
+
+        #self._lock = threading.Lock()
+
+    def root(self):
+        return self.root_entry_
+
+    def gc_roots(self):
+        return self.gc_roots_entry_
+
+    def gc_subroot(self, index):
+        """ return the GC_ROOT by index """
+        return self.gc_subroot_entries_[index]
+
+    def heap(self):
+        """ return the Heap object(py) """
+        return self._isolate.Heap()
+    
+    def initRootNames(self):
+        """ init the root name table """
+        root_index = self._isolate.Roots()
+        for i in range(v8.RootIndex.kFirstStrongOrReadOnlyRoot, v8.RootIndex.kLastStrongOrReadOnlyRoot):
+            ptr = int(root_index.root(i))
+            name = root_index.Name(i)
+            log.debug("[%d] <0x%x> %s" % (i, ptr, name))
+            self.strong_gc_subroot_names_[ptr] = name
+
+    def RootName(self, addr):
+        """ return root name of the addr if it was """
+        if addr in self.strong_gc_subroot_names_:
+            return self.strong_gc_subroot_names_[addr]
+        return None
+    
     def AddSyntheticRootEntries(self):
         """ Add all Synthetic Root Entries 
             
@@ -1098,14 +1351,28 @@ class HeapSnapshot:
         #raise Exception
 
         # root_entry -- Element --> gc_root_entry
-        self.root().SetIndexedAutoIndexReference(HeapGraphEdge.kElement, self.gc_roots())
+        self.root().SetIndexedAutoIndexReference(self, HeapGraphEdge.kElement, self.gc_roots())
        
         # gc_root -- Element --> gc_subroot(i)
         for i in range(v8.Root.kNumberOfRoots):
-            self.gc_roots().SetIndexedAutoIndexReference(HeapGraphEdge.kElement, self.gc_subroot(i)) 
+            self.gc_roots().SetIndexedAutoIndexReference(self, HeapGraphEdge.kElement, self.gc_subroot(i)) 
 
         # a memory entry for object address
         self.mem_entry_ = self._AddEntry(HeapEntry.kSynthetic, "(Tagged Pointer)", 0, 0)
+
+    def SetGcSubrootReference(self, root, desc, is_weak, child_obj):
+        """ puts child_obj to subroot(root)'s reference """
+        child_entry = self.GetEntryOrLazy(child_obj)
+        if child_entry is None:
+            return
+        # TBD: is_weak
+        name = self.RootName(child_obj.tag)
+        if name is None:
+            self.gc_subroot(root).SetNamedAutoIndexReference(self, HeapGraphEdge.kInternal, desc, child_entry)
+        else:
+            self.gc_subroot(root).SetNamedReference(self, HeapGraphEdge.kInternal, name, child_entry)
+
+        # TBD: treat global objects as roots
 
     def IterateRoots(self):
 
@@ -1141,9 +1408,9 @@ class HeapSnapshot:
                     return
 
                 # tag Object
-                if root == v8.Root.kBuiltins:
-                    assert v8.InstanceType.isCode(obj.instance_type)
-                    self._snapshot.TagObject(p, "(%s builtin)" % str(desc))
+                #if root == v8.Root.kBuiltins:
+                #    assert v8.InstanceType.isCode(obj.instance_type)
+                #    self._snapshot.TagObject(p, "(%s builtin)" % str(desc))
 
                 # set to GC subroot reference
                 self._snapshot.SetGcSubrootReference(root, desc, self._visiting_weak_roots, v8.HeapObject(p))
@@ -1168,11 +1435,11 @@ class HeapSnapshot:
         # 4. WeakGlobalHandle
         #TBD
 
-    def ParseObject(self, obj):
+    def ParseObject(self, obj, parser):
         # obj: HeapObject
 
         # tick the progress counter
-        self._progress_counter.Tick(obj.Size()) 
+        #self._progress_counter.Tick(obj.Size()) 
 
         # skip FreeSpace object
         if v8.InstanceType.isFreeSpace(obj.instance_type) and \
@@ -1180,27 +1447,126 @@ class HeapSnapshot:
             return
 
         # get the HeapEntry
-        entry = self.GetEntry(obj)
+        #entry = self.GetEntry(obj)
         
         # extract reference
-        self.ExtractReferences(entry, obj)
+        #self.ExtractReferences(entry, obj)
 
         # reference to map
-        self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "map", obj.map)
+        #self.SetReferenceObject(HeapGraphEdge.kInternal, entry, "map", obj.map)
 
         # show Tagged Pointer in heapsnapshot 
-        entry.SetNamedReference(HeapGraphEdge.kInternal, "0x%x" % obj, self.mem_entry_)
+        #entry.SetNamedReference(HeapGraphEdge.kInternal, "0x%x" % obj, self.mem_entry_)
 
         # Extrace Location
-        self.ExtractLocation(entry, obj)
+        #self.ExtractLocation(entry, obj)
+
+        # Parser holds the node and edges. 
+        #parser = ObjectParser()
+
+        # Extract info from object
+        parser.ExtractObject(obj)
+        
+        # write back to snapshot
+        #self.Merge(parser)
+
+    def ParsePage(self, page):
+        parser = ObjectParser()
+        cnt = 0
+        failed = []
+        
+        for obj in page.walk():
+            cnt = cnt + 1
+
+            # skip free space
+            if v8.InstanceType.isFreeSpace(obj.instance_type) and \
+                cfg.cfgHeapSnapshotShowFreeSapce == 0:
+                continue
+
+            try:
+                parser.ExtractObject(obj)
+            except Exception as e:
+                log.error("Parse <0x%x> failed: %s" % (obj, e))
+                failed.append(obj)
+
+        self.Merge(parser)
+        return (cnt, failed,)
+
+    @profiler
+    def Merge(self, parser):
+
+        #print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
+
+        """
+        Linkup, Link all entries of parser and snapshot by memory address,
+        cases,
+        | in parser | in snapshot | action |
+        | HeapEntry |        None | move HeapEntry link to snapshot |
+        | HeapEntry |   LazyEntry | link snapshot's LazyEntry link to parser's |
+        | LazyEntry |        None | move LazyEntry link to snapshot |
+        | LazyEntry |   LazyEntry | link snapshot's lazyEntry to parser's |
+        """
+        for p,n in parser.entries_map_.items():
+
+            # parser has HeapEntry
+            parser_last_entry = n.GetLastEntry()
+
+            # address in snapshot
+            snap_entry = self.FindMapEntry(p)
+            
+            # 1. not found, add HeapEntry
+            if snap_entry is None:
+                self.entries_map_[p] = parser_last_entry
+                continue 
+
+            snap_last_entry = snap_entry.GetLastEntry()
+
+            # 2. parser has HeapEntry 
+            if isinstance(parser_last_entry, HeapEntry):
+                assert snap_last_entry.real_entry_ is None, print("0x%x"%p, snap_last_entry)
+                snap_last_entry.real_entry_ = parser_last_entry
+            
+            # 3. Snapshot has HeapEntry
+            elif isinstance(snap_last_entry, HeapEntry):
+                assert parser_last_entry.real_entry_ is None, print("0x%x"%p, parser_last_entry)
+                parser_last_entry.real_entry_ = snap_last_entry
+            
+            # 4. link parser LazyEntry to snapshot's
+            else:
+                assert parser_last_entry.real_entry_ is None
+                assert isinstance(snap_entry, LazyEntry)
+                parser_last_entry.real_entry_ = snap_entry
+
+        # Move entries,
+        # entries_ holds all the HeapEntry 
+        for n in parser.entries_:
+            # update id
+            n.index_ = len(self.entries_) 
+            n.id_ = self.id
+            self.entries_.append(n)
+
+        # Move edges,
+        # entries_map[addr]
+        #   \ LazyEntry -> None
+        #   \ LazyEntry -> HeapEntry 
+        for n in parser.edges_:
+            #print(n.to_entry_, n.from_entry_)
+            
+            assert isinstance(n.from_entry_, HeapEntry)
+            if isinstance(n.to_entry_, LazyEntry):
+                last_entry = n.to_entry_.GetLastEntry()
+                n.to_entry_ = last_entry
+            self.edges_.append(n)
 
     def IterateROHeapObjects(self):
         cnt = 0
         ro_heap = self._isolate.ReadOnlyHeap()
         failed = []
+        parser = ObjectParser()
         for obj in v8.ReadOnlyHeapObjectIterator(ro_heap):
-            self.ParseObject(obj)
+            self.ParseObject(obj, parser)
             cnt += 1
+        self.Merge(parser)
 
         print("Iterated %d RO Heap Objects" % (cnt))
         print("failed RO Heap Object: %d" % (len(failed)))
@@ -1209,9 +1575,41 @@ class HeapSnapshot:
             print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
 
     def IterateHeapObjects(self):
-        cnt = 0
+        from time import time
         heap = self.heap()
+        spaces = v8.AllocationSpace.OnlyOldSpaces()
+        total = 0
         failed = []
+        
+        t1 = time()
+        for name in spaces:
+            space = heap.getSpace(name)
+            chunks = space.getChunks()
+            len_chunks = len(chunks)
+            print("%s : %d pages" % (space.name, len(chunks)))
+            for i in range(len_chunks):
+                c = chunks[i]
+                cnt, fail = self.ParsePage(c)
+
+                total = total + cnt
+                if len(fail) > 0:
+                    failed.extend(fail)
+
+                t2 = time()
+                print("%d/%d 0x%012x: Entry(%d), Edge(%d), Time(%.3fs), Obj(%d)" % 
+                        (i, len_chunks, c, len(self.entries_), len(self.edges_), t2-t1, cnt))
+                t1 = t2 
+
+        print("Iterated %d Objects" % (total))
+        print("failed HeapObject: %d" % (len(failed)))
+        for i in failed:
+            m = i.map
+            print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
+
+    def IterateHeapObjects2(self):
+        cnt = 0
+        failed = []
+        heap = self.heap()
         for obj in v8.HeapObjectIterator(heap):
             if cfg.cfgObjectDecodeFailedAction == 0:
                 self.ParseObject(obj)
@@ -1229,7 +1627,44 @@ class HeapSnapshot:
             m = i.map
             print("0x%x : Map(0x%x), Type(%s)" % (i.tag, m.address, v8.InstanceType.Name(m.instance_type)))
 
+    def ResolveEdges(self):
+
+        cnt=0
+        failed=0
+        print("Resolve all edges ...")
+        for p,v in self.entries_map_.items():
+            last = v.GetLastEntry()
+            if isinstance(last, LazyEntry):
+                #print("0x%x" % p)
+                ho = v8.HeapObject.FromAddress(p)
+                try:
+                    entry = self.GetHeapEntry(ho)
+                    cnt = cnt + 1
+                except Exception as e:
+                    print("Parsing failed %x" % p, e)
+                    entry = self.AddDummyEntry(ho)
+                    failed = failed + 1
+        print("Done, resolved %d, failed %d." % (cnt, failed))
+
+        def ResolveEntry(entry):
+            if isinstance(entry, HeapEntry):
+                return entry
+
+            last = entry.GetLastEntry()
+            assert last is not None
+            assert isinstance(last, HeapEntry), print(last)
+            return last
+
+        for e in self.edges_:
+            e.from_entry_ = ResolveEntry(e.from_entry_)
+            #assert isinstance(e.from_entry_, HeapEntry), print(e) 
+            e.to_entry_ = ResolveEntry(e.to_entry_)
+            #assert isinstance(e.to_entry_, HeapEntry), print(e)
+
+        print("Total Entry(%d), Edge(%d)" % (len(self.entries_), len(self.edges_)))
+
     def FillChild(self):
+
         acuminate_index = 0
         for node in self.entries_:
             acuminate_index = node.set_children_index(acuminate_index) 
@@ -1276,15 +1711,17 @@ class HeapSnapshot:
         self.root_entry_ = None
         self.gc_roots_entry_ = None
         del self.gc_subroot_entries_[:]
-
-        del self.entries_[:]
-        del self.edges_[:]
-        del self.locations_[:]
         self.names_.clear()
-        
         del self.children_[:]
-        self.entries_map_.clear()
         self.strong_gc_subroot_names_.clear()
+
+        #del self.entries_[:]
+        #del self.edges_[:]
+        #del self.locations_[:]
+        #self.entries_map_.clear()
+ 
+        # super clean
+        super(HeapSnapshot, self).CleanAll()
 
     def SerializeNodes(self):
         ay = []
@@ -1295,7 +1732,7 @@ class HeapSnapshot:
                     n.id_,
                     n.self_size_,
                     n.children_count_,
-                    n.trace_node_id_,
+                    n.mem_addr_,
                     ]
         return ay 
 
@@ -1303,16 +1740,16 @@ class HeapSnapshot:
         ay = []
         for n in self.children_:
             #n.DebugPrint() 
-            if n.name_ is None:
-                index = n.index_
+            if isinstance(n.index_or_name_, int):
+                index = int(n.index_or_name_)
                 assert n.type_ == HeapGraphEdge.kElement or n.type_ == HeapGraphEdge.kHidden
             else:
-                index = self.NameIndex(n.name_)
+                index = self.NameIndex(n.index_or_name_)
 
             # edge needs multiple to sizeof(node_fields)
             ay += [ n.type_,
                     int(index),
-                    int(n.to_entry.index_) * 6
+                    int(n.to_entry.index_) * 7
                   ]
         return ay
 
@@ -1341,9 +1778,9 @@ class HeapSnapshot:
         nodes = '['
         for i in range(0, len(an), 6):
             if i == 0:
-                nodes += "%d,%d,%d,%d,%d,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
+                nodes += "%d,%d,%d,%d,%d,0,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
             else:
-                nodes += ",%d,%d,%d,%d,%d,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
+                nodes += ",%d,%d,%d,%d,%d,0,%d\n" % (an[i], an[i+1], an[i+2], an[i+3], an[i+4], an[i+5])
         nodes += ']'
 
         #edges = json.dumps(ae)
@@ -1367,7 +1804,7 @@ class HeapSnapshot:
         # one string one line
         names = json.dumps(ay, indent=0, separators=(',', ':'))
 
-        meta = '''{"node_fields":["type","name","id","self_size","edge_count","trace_node_id"],
+        meta = '''{"node_fields":["type","name","id","self_size","edge_count","trace_node_id","mem_addr"],
 "node_types":[["hidden","array","string","object","code","closure","regexp","number","native","synthetic","concatenated string","sliced string","symbol","bigint"],"string","number","number","number","number","number"],
 "edge_fields":["type","name_or_index","to_node"],
 "edge_types":[["context","element","property","internal","hidden","shortcut","weak"],"string_or_number","node"],
@@ -1423,6 +1860,9 @@ class HeapSnapshot:
         # iterate all Heap Objets
         self.IterateHeapObjects()
 
+        # resolve all edges
+        self.ResolveEdges()
+
         # Fill the child
         self.FillChild()
 
@@ -1431,3 +1871,125 @@ class HeapSnapshot:
 
         # clean 
         self.CleanAll()
+
+    def MapWriteIndex(self, eachsize=100):
+        heap = self.heap()
+        spaces = v8.AllocationSpace.OnlyOldSpaces()
+        assert eachsize > 10
+
+        if not os.path.exists("snapshot.d"):
+            os.mkdir("snapshot.d") 
+
+        pages = []
+        cnt = 0
+        page_cnt = 0
+
+        def WriteIndexFile(idx):
+            with open("snapshot.d/snapshot_%d.map" % (idx), 'wb') as f:
+                pickle.dump(pages, f, pickle.HIGHEST_PROTOCOL)
+
+        for name in spaces:
+            space = heap.getSpace(name)
+            print(space.name)
+            chunks = space.getChunks()
+            for i in chunks:
+                pages.append(i.address)
+
+                if len(pages) >= eachsize:
+                    # write to index 
+                    WriteIndexFile(page_cnt)
+                    page_cnt = page_cnt + 1
+                    pages = []
+
+                cnt = cnt + 1
+        
+        WriteIndexFile(page_cnt)
+        page_cnt = page_cnt + 1
+        pages = []
+
+        print("Total %d pages in %d maps." % (cnt, page_cnt))
+
+    @profiler
+    def MapSnapshot(self, index):
+      
+        with open("snapshot.d/snapshot_%d.map" % index, 'rb') as f:            
+            pages = pickle.load(f)
+
+        parser = ObjectParser()
+        cnt = 0
+        for p in pages:
+            page = v8.MemoryChunk(p)
+            cnt = cnt + 1
+            print("map_%d (%d/%d) page(0x%x)" % (index, cnt, len(pages), int(page)))
+            for obj in page.walk():
+                # skip free space
+                if v8.InstanceType.isFreeSpace(obj.instance_type) and \
+                    cfg.cfgHeapSnapshotShowFreeSapce == 0:
+                    continue
+
+                parser.ExtractObject(obj)
+
+        print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
+
+        parser.SaveFile("snapshot.d/snapshot_%d.rec.tmp" % index)
+        os.rename("snapshot.d/snapshot_%d.rec.tmp" % index, "snapshot.d/snapshot_%d.rec" % index) 
+
+    @profiler
+    def ReduceGenerate(self, filename="core.heapsnapshot"):
+        # init helpers
+        self.initRootNames()
+
+        # add all Synthetic entries
+        self.AddSyntheticRootEntries()
+       
+        # iterate roots 
+        self.IterateRoots()
+
+        # iterate Readonly Heap Objects
+        self.IterateROHeapObjects()
+
+        # reduce
+        rec_files = [] 
+        for f in os.listdir("snapshot.d"):
+            if f.endswith(".map"):
+                rec = f[:-4] + ".rec"
+                rec_files.append("snapshot.d/%s" % rec)
+        print("Polling %d files ..." % (len(rec_files)))
+
+        len_files = len(rec_files)
+        while len(rec_files) > 0:
+            print("reduce (%d/%d)" % (len_files - len(rec_files), len_files))
+
+            is_idle = 1
+            for f in rec_files:
+                if os.path.exists(f):
+                    print("Merging %s" % f)
+
+                    # merge
+                    parser = ObjectParser()
+                    parser.LoadFile(f)
+                    self.Merge(parser)
+                    parser.CleanAll()
+                    
+                    rec_files.remove(f)
+                    is_idle = 0
+
+            # delay
+            if is_idle:
+                time.sleep(5)
+
+        print("Polling done.")
+
+        # resolve all edges
+        self.ResolveEdges()
+
+        # Fill the child
+        self.FillChild()
+
+        # output json
+        self.serializer(filename)
+
+        # clean 
+        self.CleanAll()
+        
+

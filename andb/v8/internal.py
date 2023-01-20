@@ -5,6 +5,7 @@ from __future__ import print_function, division
 """
 import re
 import types
+import struct
 import collections
 
 import andb.dbg as dbg
@@ -1471,8 +1472,112 @@ class Enum(int, dbg.Enum):
     def __str__(self):
         return self.to_string()
 
+class ChunkBlock(object):
 
-class Value(AutoLayout, dbg.Block):
+    #_address = None 
+    #_reader = None
+    
+    kAlignmentMask = 0x3ffff
+    
+    _cls_chunks = {}
+
+    class ChunkInfo(object):
+        
+        def __init__(self, chunk):
+            self._address = chunk.address
+            self._size = chunk.size
+            self._bytes = dbg.Target.MemoryRead(self._address, self._size)
+
+    class ChunkBlockReader(dbg.Block):
+        
+        _chunk = None
+        
+        def GetInChunkOffset(self, off):
+            return self._address + off - self._chunk._address
+
+        def LoadPtr(self, off):
+            return struct.unpack_from('Q', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+
+        def LoadU64(self, off):
+            return struct.unpack_from('Q', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+
+        def LoadU32(self, off):
+            return struct.unpack_from('I', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+
+        def LoadU16(self, off):
+            return struct.unpack_from('H', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+        
+        def LoadU8(self, off):
+            return struct.unpack_from('B', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+
+        def LoadDouble(self, off):
+            return struct.unpack_from('Q', self._chunk._bytes, self.GetInChunkOffset(off))[0]
+
+    def InitReader(self, addr):
+        #self._address = addr
+        reader = self.GetChunkBlock(addr)
+        if reader is None:
+            reader = dbg.Block()
+            reader._address = addr 
+        self._reader = reader
+        assert self._reader
+
+    @classmethod
+    def AddChunk(cls, chunk):
+        if chunk.address in cls._cls_chunks:
+            return
+        c = ChunkBlock.ChunkInfo(chunk)
+        ChunkBlock._cls_chunks[chunk.address] = c 
+
+    @classmethod
+    def CacheSize(cls):
+        return len(cls._cls_chunks)
+
+    @classmethod
+    def GetChunkBaseAddress(cls, ptr):
+        return ptr & (~cls.kAlignmentMask)
+
+    def GetChunkBlock(self, ptr):
+        chunk_addr = self.GetChunkBaseAddress(ptr)
+        if chunk_addr in self._cls_chunks:
+            reader = ChunkBlock.ChunkBlockReader()
+            reader._address = ptr 
+            reader._chunk = self._cls_chunks[chunk_addr]
+            return reader
+        return None 
+
+    @property
+    def address(self):
+        return self._reader._address
+
+    def LoadPtr(self, off):
+        return self._reader.LoadPtr(off)
+    
+    def LoadU64(self, off):
+        return self._reader.LoadU64(off)
+    
+    def LoadU32(self, off):
+        return self._reader.LoadU32(off)
+    
+    def LoadU16(self, off):
+        return self._reader.LoadU16(off)
+    
+    def LoadU8(self, off):
+        return self._reader.LoadU8(off)
+    
+    def LoadDouble(self, off):
+        return self._reader.LoadDouble(off)
+
+    def GetCString(self, length=-1):
+        return self._reader.GetCString(length)
+    
+    def LoadCString(self, off, length=-1):
+        return self._reader.LoadCString(off, length)
+    
+    def LoadUString(self, off, length=-1):
+        return self._reader.LoadUString(off, length)
+
+class Value(AutoLayout, ChunkBlock):
     """
         represents an abstract object for any v8 Object
     """
@@ -1550,7 +1655,8 @@ class Value(AutoLayout, dbg.Block):
             c.LoadDwf()
 
     def __init__(self, address):
-        self._address = address
+        #self._address = address
+        self.InitReader(address)
 
     def __int__(self):
         return self._address
@@ -1639,3 +1745,5 @@ def LoadDwf():
     # build Maps
     from .object import ObjectMap
     ObjectMap.LoadDwf()
+
+

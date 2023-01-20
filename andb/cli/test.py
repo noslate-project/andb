@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 from andb.dbg import Command, CommandPrefix, Target, Value, Type
 from andb.ptmalloc import ArenaVisitor
-from andb.shadow import ObjectVisitor, TestVisitor
+from andb.shadow import ObjectVisitor, TestVisitor, HeapSnapshot
 
 """ test commands
 """
@@ -52,6 +52,18 @@ class cli_test_find_function(Command):
 
     def invoke(self, argv):
         TestVisitor.FindFunction(argv)
+
+class cli_test_value(Command):
+    _cxpr = "test value"
+
+    def invoke(self, argv):
+        TestVisitor.ValueTest(argv)
+
+class cli_test_single(Command):
+    _cxpr = "test single"
+
+    def invoke(self, argv):
+        TestVisitor().SingleValue(argv)
 
 class cli_mm(CommandPrefix):
     _cxpr = "mm"
@@ -156,4 +168,31 @@ class cli_objgraph_backrefs(Command):
         import objgraph
         obj = objgraph.at(argv[0])
         objgraph.show_backrefs(obj, max_depth=5, filename="og_b.png")
+
+
+class cli_mapreduce(CommandPrefix):
+    _cxpr = "mapreduce"
+
+
+class cli_mapreduce_index(Command):
+    _cxpr = "mapreduce index"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        snap.MapWriteIndex(int(argv[0]))
+
+class cli_mapreduce_snapshot(Command):
+    _cxpr = "mapreduce snapshot"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        index = int(argv[0])
+        snap.MapSnapshot(index)
+
+class cli_mapreduce_reduce(Command):
+    _cxpr = "mapreduce reduce"
+
+    def invoke(self, argv):
+        snap = HeapSnapshot()
+        snap.ReduceGenerate()
 

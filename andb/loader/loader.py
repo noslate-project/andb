@@ -1,139 +1,176 @@
-#!/usr/bin/env python
-
-""" alinode debugger loader,
-      is part of alinode andb project.
-
-    http://xxxx
-"""
-
 from __future__ import print_function
-
 import os
-import sys
-import argparse
 
-
-# add andb library
-directory, file = os.path.split(__file__)
-directory       = os.path.expanduser(directory)
-directory       = os.path.abspath(directory)
-
-#fmt_dir = "%s/andb/fmt" % directory
-
-#if not fmt_dir in sys.path:
-#    sys.path.insert(0, fmt_dir)
-#print(sys.path)
-
-loader_desc = """
-Alinode Debugger Loader
-
-A better experience for any node.js developers.
-
-1) auto download binary (but not start a debugger session)
-   andb can auto download the matched binary and typ file from remote. 
-     
-    andb -c core
-
-2) debug only a corefile using lldb
-   (imply auto download binary, if found)
-    andb -l -c core
-
-3) debug a corefile with local binary
-    andb -l node -c core
-
-4) start a new process
-    andb -l node
-
-5) debug a live process
-    andb -l -p <pid>
-
-choose your favourite debugger:
-  andb -g or --gdb     : request a gdb console.
-  andb -l or --lldb    : request a lldb console.
-
-"""
-
-parser = argparse.ArgumentParser(description=loader_desc, formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument('-g', '--gdb', action='store_true', help='using gdb as debugger.')
-parser.add_argument('-l', '--lldb', action='store_true', help='using lldb as debugger. (default)')
-parser.add_argument('-p', '--pid', nargs=1, type=int, help='the process id to attach to.')
-parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile')
-parser.add_argument('binary', nargs="?", type=str, help='node or shinki binaray')
-#parser.add_argument('opts', nargs="*", help='debugger options')
-
-args, dbg_opts = parser.parse_known_args()
-
-print(os.path.abspath(__file__))
-dirname, filename = os.path.split(__file__)
-dirname = os.path.expanduser(dirname)
-andb_dir = os.path.abspath(dirname)
-
-#if not andb_dir in sys.path:
-#    sys.path.insert(0, andb_dir)
-
-#print('gdb:', args.gdb, 'lldb:', args.lldb,
-#  'core:', args.core, 'binary:', args.binary, 'opts:', args.opts)
-
-binary = None
-
-if args.binary:
-    """ use specified binary
+class FileWrap(object):
+    """ warp object for file input.
     """
-    binary = args.binary
+    def __init__(self, f):
+        self._file = f
+    
+    def FileName(self):
+        return str(self._file)
 
-elif args.core:
-    """ only corefile
+class Loader(object):
+    """ Loader base for all debuggers 
     """
-    from myloader import CorefileAuxiliaryDownloader, Corefile
-    corepath = args.core
-    corefileFmt = Corefile()
-    corefileFmt.Load(corepath)
-    buildId = corefileFmt.GetBuildId()
-    print('build-id:', buildId)
 
-    corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader()
-    info = corefileAuxiliaryDownloader.Download(buildId)
+    # binary to debug
+    _exec = None
 
-    os.environ['ANDB_TYP'] = info['typ']
+    # node.typ file path
+    _typ = None
 
-    if 'bin' in info:
-        binary = info['bin']
+    # corefile path
+    _core = None
 
+    # pid of live process
+    _pid = None
 
-if args.lldb:
-    """ start lldb
+    # commands array after initialized (batch mode)
+    _commands = None 
+
+    # debugger raw arguments (passthrough)
+    _args = None
+
+    # in batch mode
+    _is_batch = None 
+
+    def __init__(self, andb_dir):
+        # for init files
+        self._andb_dir = andb_dir
+
+    def SetPid(self, pid):
+        assert self._core is None
+        assert self._pid is None
+        self._pid = pid
+
+    def SetCore(self, core):
+        assert self._core is None
+        self._core = core
+
+    def SetTyp(self, typ):
+        assert self._typ is None
+        self._typ = typ
+
+    def SetExec(self, exe):
+        assert self._exec is None
+        self._exec = exe
+
+    def BatchOn(self):
+        self._is_batch = True 
+
+    def AddArgs(self, args):
+        if self._args is None:
+            self._args = []
+        #print(args)
+        self._args.extend(args)
+
+    def AddCommandLine(self, l):
+        self.AddCommands([l.split()])
+
+    def AddCommandFile(self, f):
+        self.AddCommands([[FileWrap(f)]])
+
+    def AddCommands(self, cmds):
+        if self._commands is None:
+            self._commands = []
+        for a in cmds:
+            #print(a)
+            if isinstance(a[0], FileWrap):
+                cmd = a[0]
+            else:
+                cmd = a
+            self._commands.append(cmd)
+
+    def default(self):
+        raise NotImplementedError
+
+    def Opts(self):
+        raise NotImplementedError
+
+    def CmdLine(self):
+        return " ".join(slef.Opts())
+
+class GdbLoader(Loader):
+    """ GDB loader
     """
-    opts = ['lldb', 
-            '-x',  # no any .lldbinit
-            '-o "com sc im %s/lldbinit.py"' % andb_dir,  # lldbinit python script
-            '-s %s/lldbinit.cmd' % andb_dir,  # lldbinit command
-           ]
-    if binary:
-        opts.append(binary)
-    if args.core:
-        opts.extend(["-c", args.core])
-    if args.pid:
-        opts.append("-p %d" % args.pid[0])
 
-    print(" ".join(opts))
-    os.system(" ".join(opts))
-
-elif args.gdb:
-    """ start gdb 
-    """
-    opts = ['gdb', 
+    @property
+    def default(self):
+        return ['gdb', 
             '--nh',  # no ~/.gdbinit
             '--nx',  # no .gdbinit 
-            '-x %s/gdbinit.py' % andb_dir  # gdbinit python script
+            '-ix', '%s/init/gdbinit.cmd' % self._andb_dir,  # gdbinit commands
+            '-x', '%s/init/gdbinit.py' % self._andb_dir,    # gdbinit python script
            ]
-    if binary:
-        opts.append(binary)
-    if args.core:
-        opts.append(args.core)
-    if args.pid:
-        opts.append("-p %d" % args.pid[0])
-    if dbg_opts:
-        opts.extend(dbg_opts)
 
-    print(" ".join(opts))
-    os.system(" ".join(opts)) 
+    def Opts(self):
+        opts = self.default
+        if self._exec:
+            opts.append(self._exec)
+        
+        if self._core:
+            opts.extend(['--core', '%s' % self._core])
+        
+        if self._typ:
+            os.environ['ANDB_TYP'] = self._typ 
+
+        if self._pid:
+            opts.extend(['--pid', '%d' % self._pid])
+
+        if self._is_batch:
+            opts.append('--batch')
+
+        if self._commands:
+            for i in self._commands:
+                if isinstance(i, FileWrap):
+                    opts.extend(["-x", '%s' % i.FileName()])
+                else:
+                    opts.extend(["-ex", " ".join(i)])
+        
+        if self._args:
+            opts.extend(self._args)
+        
+        print(opts)
+        return opts
+
+
+class LldbLoader(Loader):
+    """ GDB loader
+    """
+
+    @property
+    def default(self):
+        return ['lldb', 
+            '-x',  # no any .lldbinit
+            '-o', "com sc im %s/init/lldbinit.py" % self._andb_dir,  # lldbinit python script
+            '-s', "%s/init/lldbinit.cmd" % self._andb_dir,             # lldbinit command
+           ]
+
+    def Opts(self):
+        opts = self.default
+        if self._exec:
+            opts.extend(["-f", self._exec])
+        if self._core:
+            opts.extend(['-c', self._core])
+        if self._typ:
+            os.environ['ANDB_TYP'] = self._typ 
+        if self._pid:
+            opts.extend(['-p', self._pid])
+
+        if self._is_batch:
+            opts.append('-b')
+
+        if self._commands:
+            for i in self._commands:
+                if isinstance(i, FileWrap):
+                    opts.extend(["-s", "%s" % i.FileName()])
+                else:
+                    opts.extend(["-o", " ".join(i)])
+ 
+        if self._args:
+            opts.extend(self._args)
+        
+        print(opts)
+        return opts
+

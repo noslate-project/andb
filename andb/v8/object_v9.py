@@ -146,6 +146,10 @@ class ScopeInfo(HeapObject):
         ]}
 
     @property
+    def is_empty(self):
+        return False 
+
+    @property
     def has_saved_class_variable_index(self):
         return self.flags.has_saved_class_variable_index
 
@@ -402,7 +406,7 @@ from .enum import (
     IsStaicFlag,
 )
 
-from .struct import (
+from .structure import (
     Isolate,
 )
 

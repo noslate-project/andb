@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 
 import re
-import struct
+#import struct
 
 from functools import wraps
 from andb.utility import Logging as log, oneshot, CachedProperty
@@ -305,12 +305,14 @@ class HeapObject(Object, Value):
     @classmethod
     def __autoLayout(cls):
         return {"layout": [
-            {"name": "map", "type": Map},
+            {"name": "map_or_trans", "alias": ["map"], "type": Map},
          ]}
 
     def __init__(self, obj):
         tag = int(obj)
-        self._address = tag & (~Internal.kHeapObjectTagMask)
+        #self._address = tag & (~Internal.kHeapObjectTagMask)
+        address = tag & (~Internal.kHeapObjectTagMask)
+        self.InitReader(address)
 
     def __int__(self):
         return self.tag
@@ -361,7 +363,7 @@ class HeapObject(Object, Value):
 
     @property
     def ptr(self):
-        return self._address
+        return self.address
 
     @classmethod
     def cType(cls, val):
@@ -373,13 +375,21 @@ class HeapObject(Object, Value):
         m = self.map
 
         # support forwarding
-        if allow_forward and m.isSmi():
-            m = m.GetMap(allow_forward=0)
+        if allow_forward and m.IsSmi():
+            m = m.GetMap2(allow_forward=0)
+        return m
+
+    @CachedProperty
+    def map(self):
+        m = self.map_or_trans
+        if m.IsSmi():
+            m = m.map_or_trans
         return m
 
     @CachedProperty
     def instance_type(self):
         """ return Instance Type (InstanceType) """
+        return self.map.instance_type
         try:
             return self.map.instance_type
         except Exception as e:
@@ -708,6 +718,9 @@ class Map(HeapObject):
 
     _typeName = 'v8::internal::Map'
 
+    # cache all Map Object 
+    _map_cache = {} 
+
     """
     // All heap objects have a Map that describes their structure.
     //  A Map contains information about:
@@ -864,6 +877,11 @@ class Map(HeapObject):
             {'name': 'prototype_validity_cell', 'type': Object},  # [Smi, Cell]
             {'name': 'transitions_or_prototype_info', 'type': Object},  # [Map, TransitionArray, PrototypeInfo, Smi]},
         ]}
+
+    #def __new__(cls, tag):
+    #    ret = super(Map, cls).__new__(cls, tag)
+    #    print(ret)
+    #    return ret
 
     """ bitfield helper
     """
@@ -2240,8 +2258,11 @@ class Context(HeapObject):
 
     def WalkAllSlots(self):
         scope_info = ScopeInfo(self.scope_info)
-        local_count = scope_info.context_local_count
 
+        if scope_info.is_empty:
+            return
+
+        local_count = scope_info.context_local_count
         for i in range(local_count):
             name = String(scope_info.context_local_names(i)).ToString()
             o = Object(self.GetLocal(i))
@@ -2477,7 +2498,7 @@ class FreeSpace(HeapObject):
     def __autoLayout(cls):
         return {"layout": [
             {"name": "size", "type": Smi},
-            {"name": "next", "tpye": Object},
+            {"name": "next", "type": Object},
         ]}
 
     def Size(self):
@@ -2858,16 +2879,16 @@ class JSObject(JSReceiver):
            
         receiver = self
         # Lookup Symbol.toStringTag
-        it_symbol_to_string_tag = LookupIterator(receiver, 
-                name="Symbol.toStringTag",
-                configuration=LookupIterator.Configuration.PROTOTYPE_CHAIN_SKIP_INTERCEPTOR,
-            )
-        maybe_tag = it_symbol_to_string_tag.GetDataProperty()
-        if maybe_tag:
-            tag = String(maybe_tag)
-            if tag.IsString():
-                #print("2 GetConstructorTuple.tag_name")
-                return (None, tag.ToString())
+        #it_symbol_to_string_tag = LookupIterator(receiver, 
+        #        name="Symbol.toStringTag",
+        #        configuration=LookupIterator.Configuration.PROTOTYPE_CHAIN_SKIP_INTERCEPTOR,
+        #    )
+        #maybe_tag = it_symbol_to_string_tag.GetDataProperty()
+        #if maybe_tag:
+        #    tag = String(maybe_tag)
+        #    if tag.IsString():
+        #        #print("2 GetConstructorTuple.tag_name")
+        #        return (None, tag.ToString())
 
         # Protoperty Iterator
         it = PrototypeIterator(receiver) 
@@ -3208,8 +3229,14 @@ class SharedFunctionInfo(HeapObject):
 
     @CachedProperty
     def parameter_count(self):
-        return self.formal_parameter_count
-
+        """ Corrected parameter_count
+        """
+        cnt = self.formal_parameter_count
+        # uint16_max kDontAdaptArgumentsSentinel
+        if cnt == 65535:
+            cnt = 0
+        return cnt
+    
     def DebugPrint2(self):
         print(" - function_data :", Object.SBrief(self.function_data))
         print(" - name:", Object.SBrief(self.name_or_scope_info))
@@ -3924,6 +3951,7 @@ class ObjectMap:
         tag = Internal.TaggedT(obj)
         instance_type = obj.instance_type
         instance_type_num = int(instance_type)
+        assert instance_type_num < len(cls._cached_table), print("instance_type(%d), len(%d) %x" % (instance_type_num, len(cls._cached_table), tag))
         obj_class = cls._cached_table[instance_type_num]
         if obj_class is None:
             log.error('not binding for %s (%d)' % (str(instance_type), int(instance_type)))
@@ -3966,7 +3994,7 @@ from .enum import (
     RepresentationKind,
 )
 
-from .struct import (
+from .structure import (
     Isolate,
 )
 

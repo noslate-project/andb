@@ -3,7 +3,7 @@ from __future__ import print_function, division
 
 """ v8 engine support
 """
-from .internal import Version, Internal, Struct, ObjectSlot, Enum
+from .internal import Version, Internal, Struct, ObjectSlot, Enum, ChunkBlock
 from andb.utility import CachedProperty, Logging as log
 from itertools import chain
 import andb.stl as stl
@@ -102,6 +102,20 @@ class Isolate(Struct):
     @classmethod
     def GetCurrent(cls):
         return cls._current_isolate
+    
+    def MakeChunkCache(self):
+        heap = self.Heap()
+        spaces = AllocationSpace.AllSpaces() 
+        print("Make ChunkCache ...")
+        for name in spaces:
+            space = heap.getSpace(name)
+            chunks = space.getChunks()
+            for i in chunks:
+                try:
+                    ChunkBlock.AddChunk(i)
+                except Exception as e:
+                    print('AddChunk %x failed, %s' % (i, e))
+        print("Done ChunkCache, %d chunks cached." % ChunkBlock.CacheSize())
 
     def Heap(self):
         return Heap(self['heap_'].AddressOf(), self)
@@ -393,7 +407,6 @@ class Heap(Struct):
             self.IterateYoung(v)
             self.IterateOld(v)
 
-
     def getIsolate(self):
         if self.parent is not None:
             return self.parent
@@ -612,6 +625,9 @@ class MemoryChunk(Struct):
     def BaseAddress(cls, ptr):
         return ptr & (~cls.kAlignmentMask)
 
+    def GetOffset(self, address):
+        pass
+
     def walk(self):
         """ walk for objects """
         spc = self.getSpace()
@@ -620,9 +636,18 @@ class MemoryChunk(Struct):
             if ptr == spc.top and ptr != spc.limit:
                 ptr = spc.limit
                 continue
-            ho = HeapObject(ptr)
+
+            ho = HeapObject.FromAddress(ptr)
+            if not ho.Access():
+                return
+
             # mp = ho.GetMap()
-            size = ho.Size()
+            try:
+                size = ho.Size()
+            except:
+                print("failed: %x"  % ptr)
+                return
+
             # print("Object(0x%x) size(%d) %s" % (ptr, size, InstanceType.Name(mp.GetType())))
             yield ho
             ptr += size
@@ -775,6 +800,12 @@ class Space(Struct):
             yield chunk
             ptr = ptr['list_node_']['next_']
 
+    def getChunks(self):
+        chunks = []
+        for i in self.walkPages():
+            chunks.append(i)
+        return chunks
+
 
 class SpaceWithLinearArea(Space):
     _typeName = 'v8::internal::SpaceWithLinearArea'
@@ -802,6 +833,7 @@ class PagedSpace(SpaceWithLinearArea):
 
     def show_sl(self):
         print("%-14s: %10u %10u" % (self.name, self.committed, self.max_committed))
+
 
 class SemiSpace(SpaceWithLinearArea):
     _typeName = 'v8::internal::SemiSpace'
@@ -852,12 +884,25 @@ class NewSpace(SpaceWithLinearArea):
         from_committed = self.from_space.committed
         return to_committed + from_committed 
 
+    #def walkPages(self):
+    #    for i in self.from_space.walkPages():
+    #        yield i
+    #    for i in self.to_space.walkPages():
+    #        yield i
+
+    def getChunks(self):
+        chunks = []
+        for i in self.walkPages():
+            chunks.append(i)
+        return chunks
+
     def show_sl(self):
         to_committed = self.to_space.committed
         from_committed = self.from_space.committed
         print("%-14s: %10u" % (self.name, to_committed + from_committed))
         print(" - from_space : %10u" % from_committed)
         print(" - to_space   : %10u" % to_committed)
+
 
 if Version.major >= 9:
     class ReadOnlySpace(Struct):
@@ -881,6 +926,16 @@ if Version.major >= 9:
 
         def show_sl(self):
             print("%-14s: %10u %10u" % (self.name, self.committed, self.max_committed))
+
+        def walkPages(self):
+            for i in stl.Vector(self['pages_']).__iter__():
+                yield MemoryChunk(i)
+
+        def getChunks(self):
+            chunks = []
+            for i in self.walkPages():
+                chunks.append(i)
+            return chunks
 
 else:
     class ReadOnlySpace(PagedSpace):
