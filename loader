@@ -66,7 +66,7 @@ parser.add_argument('-g', '--gdb', action='store_true', help='using gdb as debug
 parser.add_argument('-l', '--lldb', action='store_true', help='using lldb as debugger. (default)')
 parser.add_argument('-p', '--pid', nargs=1, type=int, help='the process id to attach to.')
 parser.add_argument('-b', '--batch', action='store_true', help='the process id to attach to.')
-parser.add_argument('-t', '--tag', nargs=1, type=int, help='specified version for debugging.')
+parser.add_argument('-t', '--tag', nargs=1, type=str, help='specified version for debugging.')
 parser.add_argument('-m', '--mode', nargs=1, choices=['snapshot', 'cache'], help='mapreduce mode (snapshot, cache).') 
 parser.add_argument('-j', '--jobs', action='store', type=int, help='jobs for mapreduce.')
 parser.add_argument('-x', '--command', dest='cmds', action='append', nargs="+", type=str, help='eval command can be multiple times.')
@@ -113,11 +113,15 @@ elif args.core:
     corepath = args.core
     corefileFmt = Corefile()
     corefileFmt.Load(corepath)
-    buildId = corefileFmt.GetBuildId()
-    print('build-id:', buildId)
 
     corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader()
-    info = corefileAuxiliaryDownloader.Download(buildId)
+    
+    if args.tag and len(args.tag) > 0:
+        info = corefileAuxiliaryDownloader.FetchByTag(args.tag[0])
+    else:
+        buildId = corefileFmt.GetBuildId()
+        print('build-id:', buildId)
+        info = corefileAuxiliaryDownloader.FetchByBuildId(buildId)
 
     typfile = info['typ']
     os.environ['ANDB_TYP'] = typfile 

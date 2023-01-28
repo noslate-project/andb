@@ -22,32 +22,31 @@ class IsolateGuesser:
         v8.Isolate.SetCurrent(iso)
         # set convenience_variable
         dbg.ConvenienceVariables.Set('isolate', pyo_iso._I_value)
-        #iso.MakeChunkCache()
 
     def CheckIsolate(self, address):
         try:
             _iso = v8.Isolate(address)
             _heap_iso = _iso['heap_']['isolate_']
             if _iso == _heap_iso:
-                return _iso 
+                return _iso
         except:
             pass
         return None
 
     def CheckMemoryChunk(self, address):
-        m = v8.MemoryChunk(address) 
+        m = v8.MemoryChunk(address)
         _heap = m['heap_']
-        _iso = _heap['isolate_'] 
+        _iso = _heap['isolate_']
         _iso_heap = _iso['heap_'].AddressOf()
         if _heap == _iso_heap:
-            return _iso 
-        return None 
+            return _iso
+        return None
 
     def GuessFromStacks(self):
         """ walk all thread, guess from sp """
         for t in dbg.Target.GetThreads():
 
-            # get low addres from 'sp' 
+            # get low addres from 'sp'
             low = t.GetFrameTop().GetSP()
             
             # search for memory region of 'sp'
@@ -82,6 +81,7 @@ class IsolateGuesser:
                 try:
                     iso = self.CheckMemoryChunk(m.start_address)
                 except Exception as e:
+                    #print("0x%x %s" % (m.start_address, e))
                     iso = None
                 if iso is None:
                     continue
