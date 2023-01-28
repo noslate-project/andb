@@ -89,13 +89,7 @@ class CorefileAuxiliaryDownloader:
         print('Downloading %s / %s' % (version, outf))
         return os.system('curl %s -o %s' % (url, outf))
 
-    def DownloadVersion(self, buildId, checkSum=None): 
-        bid = self._url_by_buildid(buildId)
-        try:
-            version = urlopen(bid).readline().decode('utf-8').rstrip()
-        except Exception:
-            return None
-
+    def DownloadVersion(self, buildId, version, checkSum=None):
         # download all files
         if self._curl_version_file(version, "md5sum.txt"): return None
         if self._curl_version_file(version, "metadata.json"): return None
@@ -103,36 +97,72 @@ class CorefileAuxiliaryDownloader:
         if self._curl_version_file(version, "node.gz"): return None
         if os.system("gzip -f -d %s" % self._local_version_path(version, "node.typ.gz")): return None
         if os.system("gzip -f -d %s" % self._local_version_path(version, "node.gz")): return None
-        
-        # create buildid link 
-        os.symlink(version, self._local_version_path(buildId)) 
 
-        return version  
+        # create buildid link
+        lnk = self._local_version_path(buildId)
+        if len(lnk) > 5 and lnk[-1] != '/' and os.path.exists(lnk):
+            # some protect
+            os.remove(lnk)
+        os.symlink(version, lnk)
 
-    def GetBuildIdVersion(self, buildId):
+        return version
+
+    def GetOrDownloadBuildId(self, buildId):
         """ return the version string of specified BuildId.
         """
-        # 1. read local cached 
+        # read local cached
         lnk = self._local_version_path(buildId)
         if os.path.exists(lnk):
-            return os.readlink(lnk) 
+            return os.readlink(lnk)
 
-        # 2. request remote download
-        return self.DownloadVersion(buildId)
+        # find buildId (download if local not found.)
+        bid = self._url_by_buildid(buildId)
+        try:
+            version = urlopen(bid).readline().decode('utf-8').rstrip()
+        except Exception:
+            print("Check remote buildid failed.")
+            return None
 
-    def Download(self, buildId):
-        """ return buildId record, download if necessary.
-        """
-        # 1. find buildId (download if local not found.) 
-        version = self.GetBuildIdVersion(buildId)
+        # request remote download
+        return self.DownloadVersion(buildId, version)
+
+    def GetOrDownloadTag(self, version):
+        lnk = self._local_version_path(version)
+        if os.path.exists(lnk):
+            return version
+
+        # find tag in remote (download if local not found.)
+        bid = self._url_by_version(version) + "/metadata.json"
+        try:
+            # get buildid from metadata
+            meta = json.loads(urlopen(bid).read())
+        except Exception:
+            print("Check remote version failed.")
+            return None
+
+        return self.DownloadVersion(meta['buildid'], version)
+
+    def FetchByBuildId(self, buildId):
+        version = self.GetOrDownloadBuildId(buildId)
         if version is None:
-            raise Exception("BuildId not found.")
+            raise Exception("BuildId '%s' not found." % buildId)
 
-        # 2. tell loader uses local version 
         record = {}
         record['typ'] = self._local_version_path(version, "node.typ")
         record['bin'] = self._local_version_path(version, "node")
         return record
+
+    def FetchByTag(self, tag):
+        # Get
+        version = self.GetOrDownloadTag(tag)
+        if version is None:
+            raise Exception("version '%s' not found." % tag)
+
+        record = {}
+        record['typ'] = self._local_version_path(version, "node.typ")
+        record['bin'] = self._local_version_path(version, "node")
+        return record
+
 
 def mkdir_p(path):
     try:

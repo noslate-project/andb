@@ -64,13 +64,13 @@ class cli_isolate(CommandPrefix):
 class cli_isolate_guess_pages(Command):
     _cxpr = "isolate guess page"
 
-    def invoke (self, argv):
+    def invoke(self, argv):
         IsolateGuesser().GuessFromPages()
 
 class cli_isolate_guess_stack(Command):
     _cxpr = "isolate guess stack"
 
-    def invoke (self, argv):
+    def invoke(self, argv):
         IsolateGuesser().GuessFromStacks()
 
 
