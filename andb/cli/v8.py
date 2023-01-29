@@ -53,7 +53,7 @@ class cli_v8_bt(Command):
     _cxpr = "v8 bt"
 
     def invoke(self, argv):
-        StackVisitor().Backtrace() 
+        StackVisitor().Backtrace()
 
 
 """ isolate commands
@@ -72,6 +72,25 @@ class cli_isolate_guess_stack(Command):
 
     def invoke(self, argv):
         IsolateGuesser().GuessFromStacks()
+
+class cli_isolate_list_pages(Command):
+    _cxpr = "isolate list page"
+
+    def invoke(self, argv):
+        IsolateGuesser().ListFromPages()
+
+
+class cli_isolate_list_stack(Command):
+    _cxpr = "isolate list stack"
+
+    def invoke(self, argv):
+        IsolateGuesser().ListFromStack()
+
+class cli_isolate_set(Command):
+    _cxpr = "isolate set"
+
+    def invoke(self, argv):
+        IsolateGuesser().Select(argv)
 
 
 """ heap commands

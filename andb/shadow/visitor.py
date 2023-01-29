@@ -92,6 +92,70 @@ class IsolateGuesser:
                     return iso 
         return None
 
+    def ListFromPages(self):
+        out = {}
+        regions = dbg.Target.GetMemoryRegions().GetRegions()
+        for m in regions:
+            if m.size == 256*1024:
+                try:
+                    iso = self.CheckMemoryChunk(m.start_address)
+                except Exception as e:
+                    #print("0x%x %s" % (m.start_address, e))
+                    iso = None
+                if iso is None:
+                    continue
+                else:
+                    # found
+                    if int(iso) not in out:
+                        print("page(0x%x) found isolate(0x%x)" % (m.start_address, iso))
+                        out[int(iso)] = iso
+                    #self.SetIsolate(iso)
+                    #return iso
+        return None
+
+    def ListFromStack(self):
+        """ walk all thread, guess from sp """
+        out = {}
+        for t in dbg.Target.GetThreads():
+
+            # get low addres from 'sp'
+            low = t.GetFrameTop().GetSP()
+            
+            # search for memory region of 'sp'
+            mri = dbg.Target.GetMemoryRegions().Search(low)
+            
+            # stack range
+            high = mri.end_address
+
+            for ptr in dbg.Slots(low, high):
+
+                if ptr & 0b11 != 0:
+                    continue
+
+                if ptr < 0x40000:
+                    continue
+
+                iso = self.CheckIsolate(ptr)
+                if iso is None:
+                    continue
+
+                # found
+                if int(iso) in out:
+                    break
+                
+                else:
+                    print("found isolate(0x%x), tid(%d), id(%d)" % (iso, t.tid, iso.id))
+                    out[int(iso)] = iso
+                #self.SetIsolate(iso)
+                #return iso
+        return None
+
+    def Select(self, argv):
+        addr = int(argv[0], 16)
+        iso = self.CheckIsolate(addr)
+        if iso:
+            self.SetIsolate(iso)
+
     def guess_from_tls(self):
         """ guess from thread local storage """
         #key = gdb.parse_and_eval('(int)v8::internal::Isolate::isolate_key_')

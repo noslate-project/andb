@@ -86,6 +86,7 @@ class Isolate(Struct):
 
     # holds the global isolate (pyobject)
     _current_isolate = None
+    _isolate_list = None
 
     def IsValid(self):
         try:
@@ -153,6 +154,10 @@ class Isolate(Struct):
     def thread_local_top_(self):
         return self['isolate_data_']['thread_local_top_']
 
+    @property
+    def id(self):
+        return int(self['id_'])
+
     def IterateThreadTop(self, v, top):
         v.VisitRootPointer(Root.kTop, None, ObjectSlot(top['pending_exception_']))
         v.VisitRootPointer(Root.kTop, None, ObjectSlot(top['pending_message_obj_']))
@@ -183,8 +188,6 @@ class GlobalHandles(Struct):
     _typeName = 'v8::internal::GlobalHandles'
 
     #kBlockSize = 256
-
-
 
     class Node(Struct):
         _typeName = 'v8::internal::GlobalHandles::Node'
