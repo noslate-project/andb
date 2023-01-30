@@ -86,7 +86,6 @@ class Isolate(Struct):
 
     # holds the global isolate (pyobject)
     _current_isolate = None
-    _isolate_list = None
 
     def IsValid(self):
         try:
@@ -103,7 +102,7 @@ class Isolate(Struct):
     @classmethod
     def GetCurrent(cls):
         return cls._current_isolate
-    
+   
     def MakeChunkCache(self):
         heap = self.Heap()
         spaces = AllocationSpace.AllSpaces() 

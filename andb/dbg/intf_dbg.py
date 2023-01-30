@@ -14,8 +14,21 @@ class Command(object):
     # is a prefix 
     _is_prefix = False
 
+    # __doc__ as help string
+
     def __init__(self):
         raise NotImplementedError()
+
+    def Title(self):
+        if self.__doc__:
+            # get first line of docstring as title
+            return self.__doc__.splitlines()[0].lstrip()
+        return ""
+
+    def Help(self):
+        if self.__doc__:
+            return self.__doc__.lstrip()
+        return "This command is not documented."
 
 class Block(object):
     """ holds a block memory, but not a struct or class.

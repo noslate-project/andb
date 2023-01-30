@@ -16,7 +16,8 @@ from andb.utility import (
 class IsolateGuesser:
     """ guess an isolate address from core.
     """
-   
+    _isolate_tbl = {} 
+
     def SetIsolate(self, pyo_iso):
         iso = v8.Isolate(pyo_iso)
         v8.Isolate.SetCurrent(iso)
