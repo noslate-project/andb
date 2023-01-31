@@ -16,12 +16,12 @@ from andb.utility import (
 class IsolateGuesser:
     """ guess an isolate address from core.
     """
-   
-    def SetIsolate(self, pyo_iso):
-        iso = v8.Isolate(pyo_iso)
+    _isolate_addr_map = {} 
+
+    def SetIsolate(self, iso):
         v8.Isolate.SetCurrent(iso)
         # set convenience_variable
-        dbg.ConvenienceVariables.Set('isolate', pyo_iso._I_value)
+        dbg.ConvenienceVariables.Set('isolate', iso._I_value)
 
     def CheckIsolate(self, address):
         try:
@@ -39,7 +39,7 @@ class IsolateGuesser:
         _iso = _heap['isolate_']
         _iso_heap = _iso['heap_'].AddressOf()
         if _heap == _iso_heap:
-            return _iso
+            return v8.Isolate(_iso)
         return None
 
     def GuessFromStacks(self):
@@ -92,11 +92,125 @@ class IsolateGuesser:
                     return iso 
         return None
 
+    def ListFromPages(self):
+        regions = dbg.Target.GetMemoryRegions().GetRegions()
+        for m in regions:
+            if m.size == 256*1024:
+                try:
+                    iso = self.CheckMemoryChunk(m.start_address)
+                except Exception as e:
+                    #print("0x%x %s" % (m.start_address, e))
+                    iso = None
+                if iso is None:
+                    continue
+                else:
+                    # Add Isolate 
+                    self.GetIsolate(iso)
+        self.ShowIsolates()
+        return None
+
+    def ListFromStack(self):
+        """ walk all thread, guess from sp """
+        for t in dbg.Target.GetThreads():
+
+            # get low addres from 'sp'
+            low = t.GetFrameTop().GetSP()
+            
+            # search for memory region of 'sp'
+            mri = dbg.Target.GetMemoryRegions().Search(low)
+            
+            # stack range
+            high = mri.end_address
+
+            for ptr in dbg.Slots(low, high):
+
+                if ptr & 0b11 != 0:
+                    continue
+
+                if ptr < 0x40000:
+                    continue
+
+                iso = self.CheckIsolate(ptr)
+                if iso is None:
+                    continue
+
+                # found
+                if self.GetIsolate(iso):
+                    break
+        self.ShowIsolates()
+        return None
+    
     def guess_from_tls(self):
         """ guess from thread local storage """
         #key = gdb.parse_and_eval('(int)v8::internal::Isolate::isolate_key_')
-        raise NotImplementedError() 
+        raise NotImplementedError()
 
+    def SetAddress(self, argv):
+        addr = int(argv[0], 16)
+        iso = self.CheckIsolate(addr)
+        if iso:
+            self.SetIsolate(iso)
+
+    def SelectIndex(self, argv):
+        if len(argv) == 0:
+            iso = v8.Isolate.GetCurrent()
+            print(iso)
+            return
+        idx = int(argv[0])
+        iso = self.GetIsolateById(idx)
+        if iso:
+            self.SetIsolate(iso)
+            return
+        print("Can't find Isolate with Id == %d" % idx)
+
+    def GetIsolateById(self, idx):
+        for k,v in self._isolate_addr_map.items():
+            if v.id == idx:
+                return v 
+        return None
+
+    def FindIsolate(self, iso):
+        addr = iso.address
+        if addr in self._isolate_addr_map:
+            return self._isolate_addr_map[addr]
+        return None
+
+    def GetIsolate(self, iso):
+        # true if find
+        found = self.FindIsolate(iso)
+        if found:
+            return found
+        addr = iso.address
+        self._isolate_addr_map[addr] = iso
+
+    def ClearAll(self):
+        self._isolate_addr_map.clear()
+
+    def ShowIsolates(self):
+        print("%3s %-14s %10s %10s" % ("ID", "ISOLATE-ADDR", "HEAP-SIZE", "GLOB-SIZE"))
+        for k,v in sorted(self._isolate_addr_map.items(), key=lambda x: x[1].id):
+            try:
+                heap = v.Heap()
+                print("%3d 0x%-12x %10d %10d" % (v.id, k, heap.CommitSize() ,heap.GlobalMemoryLimitSize()))
+            except Exception as e:
+                print("%3d 0x%-12x (%s)" % (v.id, k, e))
+        print("Found %d Isolate(s)." % len(self._isolate_addr_map))
+
+    def ListIsolates(self):
+        if len(self._isolate_addr_map) < 1:
+            self.ListFromPages()
+            return 
+        self.ShowIsolates()
+
+    def BatchHeapSnapshot(self):
+        from heap_snapshot import HeapSnapshot
+        for addr,iso in sorted(self._isolate_addr_map.items(), key=lambda x: x[1].id):
+            print("Switch to Isolate:%d (0x%x)" % (iso.id, addr))
+            self.SetIsolate(iso)
+
+            outf = "isolate_%d.heapsnapshot" % iso.id
+            snap = HeapSnapshot()
+            snap.Generate(outf)
 
 class HeapVisitor:
     _size = 0

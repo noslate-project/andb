@@ -270,6 +270,26 @@ class CommandsDispatcher(object):
     _I_top = [None, {}]
 
     @classmethod
+    def WalkSubCommands(cls, ds):
+        for key in ds[1]:
+            cmd = ds[1][key][0]
+            yield key,cmd
+
+    @classmethod
+    def ShowCommandHelp(cls, ds):
+        if ds[0] is not None:
+            print(ds[0].Help())
+
+        if len(ds[1]) > 0:
+            print("Subcommands,")
+            for key,cmd in cls.WalkSubCommands(ds):
+                if cmd is None:
+                    title = "See '... %s ?'" % key
+                else:
+                    title = cmd.Title()
+                print("  %-12s -- %s" % (key, title))
+
+    @classmethod
     def ShowCommandList(cls, ds, word = ''):
         out = []
         for key in ds[1]:
@@ -317,7 +337,7 @@ class CommandsDispatcher(object):
 
             # '?' give the user all sub commands
             if word == '?':
-                cls.ShowCommandList(ds)
+                cls.ShowCommandHelp(ds)
                 return
 
             # parse the word
@@ -364,7 +384,7 @@ class CommandsDispatcher(object):
         return mat
 
 
-class Command(object):
+class Command(dbg.intf.Command):
     
     _is_prefix = False 
 
@@ -377,6 +397,9 @@ class Command(object):
     @classmethod
     def Register(cls):
         CommandsDispatcher.Register(cls())
+
+    def __init__(self):
+        pass
 
 
 class CommandPrefix(dbg.Command):

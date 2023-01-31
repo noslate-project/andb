@@ -102,7 +102,7 @@ class Isolate(Struct):
     @classmethod
     def GetCurrent(cls):
         return cls._current_isolate
-    
+   
     def MakeChunkCache(self):
         heap = self.Heap()
         spaces = AllocationSpace.AllSpaces() 
@@ -153,6 +153,10 @@ class Isolate(Struct):
     def thread_local_top_(self):
         return self['isolate_data_']['thread_local_top_']
 
+    @property
+    def id(self):
+        return int(self['id_'])
+
     def IterateThreadTop(self, v, top):
         v.VisitRootPointer(Root.kTop, None, ObjectSlot(top['pending_exception_']))
         v.VisitRootPointer(Root.kTop, None, ObjectSlot(top['pending_message_obj_']))
@@ -183,8 +187,6 @@ class GlobalHandles(Struct):
     _typeName = 'v8::internal::GlobalHandles'
 
     #kBlockSize = 256
-
-
 
     class Node(Struct):
         _typeName = 'v8::internal::GlobalHandles::Node'
@@ -448,6 +450,11 @@ class Heap(Struct):
                 continue
             size += space.committed
         return size
+
+    def GlobalMemoryLimitSize(self):
+        o = self['global_allocation_limit_']
+        p = int(o)
+        return p 
 
     @property
     def gc_state(self):
@@ -791,7 +798,7 @@ class Space(Struct):
 
     def isNewSpace(self):
         return self.id == AllocationSpace.NEW_SPACE
-
+        
     def walkPages(self):
         """ walk for chunks """
         ptr = self['memory_chunk_list_']['front_']

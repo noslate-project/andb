@@ -70,10 +70,10 @@ class Command(intf.Command):
         child_fn(command)
 
     def get_short_help(self):
-        pass
+        return self.Title()
 
     def get_long_help(self):
-        pass
+        return self.Help() 
 
 class Block(intf.Block):
     """ Block 
