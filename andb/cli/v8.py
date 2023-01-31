@@ -107,7 +107,7 @@ For more information about v8 Isolate, please run 'help isolate'.
     _cxpr = "isolate"
 
     def invoke(self, argv):
-        print(argv)
+        IsolateGuesser().SelectIndex(argv)
 
 class cli_isolate_guess_pages(Command):
     """Guess Isolate from V8 Heap pages.
@@ -148,7 +148,7 @@ Uses 'isolate <id>' to select an Isolate listed.
     _cxpr = "isolate list"
 
     def invoke(self, argv):
-        print("in list")
+        IsolateGuesser().ListIsolates()
 
 class cli_isolate_list_pages(Command):
     """List all Isolates from pages.
@@ -180,7 +180,7 @@ Syntax: 'isolate set <addr>'
     _cxpr = "isolate set"
 
     def invoke(self, argv):
-        IsolateGuesser().Select(argv)
+        IsolateGuesser().SetAddress(argv)
 
 
 """ heap commands

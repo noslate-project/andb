@@ -451,6 +451,11 @@ class Heap(Struct):
             size += space.committed
         return size
 
+    def GlobalMemoryLimitSize(self):
+        o = self['global_allocation_limit_']
+        p = int(o)
+        return p 
+
     @property
     def gc_state(self):
         return self['gc_state_']
@@ -793,7 +798,7 @@ class Space(Struct):
 
     def isNewSpace(self):
         return self.id == AllocationSpace.NEW_SPACE
-
+        
     def walkPages(self):
         """ walk for chunks """
         ptr = self['memory_chunk_list_']['front_']
