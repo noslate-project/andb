@@ -171,7 +171,7 @@ Syntax: 'isolate list page'
         IsolateGuesser().ListFromStack()
 
 class cli_isolate_set(Command):
-    """ Set current isolate to address.
+    """Set current isolate to address.
 
 Syntax: 'isolate set <addr>'
     <addr> : hex value, memory address.
@@ -179,9 +179,20 @@ Syntax: 'isolate set <addr>'
 """
     _cxpr = "isolate set"
 
-    def invoke(self, argv):
+    def invoke(self, argv): 
         IsolateGuesser().SetAddress(argv)
 
+class cli_isolate_apply_heap_snapshot(Command):
+    """Generate HeapSnapshot for all Isolates. 
+
+Syntax: isolate apply all heap snapshot
+
+output files will be named to "isolate_<id>.heapsnapshot".
+"""
+    _cxpr = "isolate apply all heap snapshot"
+
+    def invoke(self, argv):
+        IsolateGuesser().BatchHeapSnapshot()
 
 """ heap commands
 """

@@ -202,6 +202,16 @@ class IsolateGuesser:
             return 
         self.ShowIsolates()
 
+    def BatchHeapSnapshot(self):
+        from heap_snapshot import HeapSnapshot
+        for addr,iso in sorted(self._isolate_addr_map.items(), key=lambda x: x[1].id):
+            print("Switch to Isolate:%d (0x%x)" % (iso.id, addr))
+            self.SetIsolate(iso)
+
+            outf = "isolate_%d.heapsnapshot" % iso.id
+            snap = HeapSnapshot()
+            snap.Generate(outf)
+
 class HeapVisitor:
     _size = 0
     _cnt = 0

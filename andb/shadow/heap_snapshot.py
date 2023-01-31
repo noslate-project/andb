@@ -1492,7 +1492,6 @@ class HeapSnapshot(GraphHolder):
         self.Merge(parser)
         return (cnt, failed,)
 
-    @profiler
     def Merge(self, parser):
 
         #print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
