@@ -1596,7 +1596,7 @@ class HeapSnapshot(GraphHolder):
 
                 t2 = time()
                 print("%d/%d 0x%012x: Entry(%d), Edge(%d), Time(%.3fs), Obj(%d)" % 
-                        (i, len_chunks, c, len(self.entries_), len(self.edges_), t2-t1, cnt))
+                        (i, len_chunks, c.address, len(self.entries_), len(self.edges_), t2-t1, cnt))
                 t1 = t2 
 
         print("Iterated %d Objects" % (total))
