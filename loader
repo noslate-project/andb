@@ -218,14 +218,15 @@ def MapReduce():
     print('parse  {:.3f}s'.format(t2-t1))
     print('reduce {:.3f}s'.format(t3-t2))
 
-if __name__ == '__main__':
-    # leader the new process group
-    os.setpgrp()
-    signal.signal(signal.SIGINT, term_handler)
-    signal.signal(signal.SIGTERM, term_handler)
 
+if __name__ == '__main__':
     # map reduce mode
     if args.mode:
+        # leader the new process group
+        os.setpgrp()
+        signal.signal(signal.SIGINT, term_handler)
+        signal.signal(signal.SIGTERM, term_handler)
+
         MapReduce()
         exit(0)
 
@@ -241,7 +242,7 @@ if __name__ == '__main__':
     if args.core:
         loader.SetCore(args.core)
     if args.pid:
-        loader.SetPid("-p %d" % args.pid[0])
+        loader.SetPid(args.pid[0])
     if args.batch:
         loader.BatchOn()
     if args.args and len(args.args) > 0:

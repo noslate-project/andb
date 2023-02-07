@@ -151,12 +151,15 @@ class LldbLoader(Loader):
         opts = self.default
         if self._exec:
             opts.extend(["-f", self._exec])
+        
         if self._core:
             opts.extend(['-c', self._core])
+        
         if self._typ:
             os.environ['ANDB_TYP'] = self._typ 
+        
         if self._pid:
-            opts.extend(['-p', self._pid])
+            opts.extend(['-p', '%d' % self._pid])
 
         if self._is_batch:
             opts.append('-b')
