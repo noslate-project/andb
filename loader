@@ -251,6 +251,10 @@ if __name__ == '__main__':
         print(args.cmds)
         loader.AddCommands(args.cmds)
 
+    # ignore CTRL+C for python
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    # spawn dbg
     opts = loader.Opts() 
     os.spawnvp(os.P_WAIT, opts[0], opts)
 
