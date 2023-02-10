@@ -842,13 +842,23 @@ class V8Unwinder(Unwinder):
         pc = pending_frame.read_register('rip')
         sp = pending_frame.read_register('rsp')
         #gdb.write("bp(%x), sp(%x), pc(%x)\n"%(bp, sp, pc)) 
-        
+
+        # rbp used as frame pointer
+        base = 8*1024*1024-1
+        if int(bp) & ~base != int(sp) & ~base or int(bp) <= int(sp):
+            return None
+
         if (bp == 0):
             return None
-        
+
         caller_bp = bp.cast(gdb.lookup_type('long').pointer()).dereference()
         caller_pc = (bp+8).cast(gdb.lookup_type('long').pointer()).dereference()
         caller_sp = bp + 16 
+
+        # valid rbp
+        if int(caller_bp) & ~base != int(sp) & ~base:
+            return None
+
         frameid = FrameId(sp, pc)
         unwind_info = pending_frame.create_unwind_info(frameid)
         unwind_info.add_saved_register('rip', caller_pc)
