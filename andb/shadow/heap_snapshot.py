@@ -1292,6 +1292,9 @@ class HeapSnapshot(GraphHolder):
         # map for Root address to Root Name (ptr to string)
         self.strong_gc_subroot_names_ = {} 
 
+        # user roots
+        self.user_roots_ = {}
+
         """ counter
         """
         self._progress_counter = ProgressCounter(self)
@@ -1381,8 +1384,11 @@ class HeapSnapshot(GraphHolder):
         if not js_global.IsJSGlobalObject():
             return
         
-        child_entry = self.GetEntryOrLazy(js_global)
-        self.gc_roots().SetNamedAutoIndexReference(self, HeapGraphEdge.kShortcut, "", child_entry)
+        ptr = child_obj.address
+        if ptr not in self.user_roots_:
+            self.user_roots_[ptr] = 1
+            child_entry = self.GetEntryOrLazy(js_global)
+            self.root().SetNamedAutoIndexReference(self, HeapGraphEdge.kShortcut, "", child_entry)
 
     def IterateRoots(self):
 
