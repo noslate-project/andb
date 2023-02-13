@@ -1372,7 +1372,17 @@ class HeapSnapshot(GraphHolder):
         else:
             self.gc_subroot(root).SetNamedReference(self, HeapGraphEdge.kInternal, name, child_entry)
 
-        # TBD: treat global objects as roots
+        # treat global objects as user roots
+        if is_weak or not child_obj.IsNativeContext():
+            return
+
+        native_context = v8.NativeContext(child_obj)
+        js_global = native_context.GetJSGlobalObject()
+        if not js_global.IsJSGlobalObject():
+            return
+        
+        child_entry = self.GetEntryOrLazy(js_global)
+        self.gc_roots().SetNamedAutoIndexReference(self, HeapGraphEdge.kShortcut, "", child_entry)
 
     def IterateRoots(self):
 
