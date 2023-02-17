@@ -96,6 +96,9 @@ class Struct(dbg.Value):
         """ tell whether the structure has been diabled due to dwarf absence """
         return cls._S_type is None
 
+    def Jsonify(self):
+        pass
+
 class Enum(object):
     """ represents a C++ Enum  
         

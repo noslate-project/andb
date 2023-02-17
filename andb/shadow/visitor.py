@@ -669,6 +669,11 @@ class NodeEnvGuesser:
     def GuessFromStacks(self):
         pass
 
+    @classmethod
+    def GetMeta(cls):
+        addr = dbg.Target.ReadSymbolAddress("node::per_process::metadata")
+        m = node.Metadata(addr)
+        return m.PrettyPrint()
 
 class StackVisitor:
     """ Visit Stack """

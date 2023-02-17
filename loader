@@ -74,6 +74,7 @@ parser.add_argument('-xf', '--command-file', dest='cmds', action='append', nargs
 parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile.')
 parser.add_argument('--args', nargs=argparse.REMAINDER, help='debugger options')
 parser.add_argument('binary', nargs="?", type=str, help='node or shinki binaray')
+parser.add_argument('-z', '--tsr', action='store_true', help='Generate Technical Support Report.')
 
 args, dbg_opts = parser.parse_known_args()
 
@@ -220,6 +221,14 @@ def MapReduce():
 
 
 if __name__ == '__main__':
+
+    # Generate Technical Support Report.
+    if args.tsr and args.core:
+        from andb.loader import TechReport
+        rpt = TechReport(corefileFmt)
+        rpt.Generate("%s.tsr" % args.core)
+        exit(0)
+
     # map reduce mode
     if args.mode:
         # leader the new process group

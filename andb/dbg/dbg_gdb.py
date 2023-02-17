@@ -616,6 +616,16 @@ class Target(intf.Target):
             return None
 
     @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        """ Read Symbol address
+        """
+        try:
+            v = gdb.parse_and_eval("&'%s'" % symbol_name)
+            return int(v)
+        except:
+            return None
+
+    @classmethod
     def ReadCStr(cls, address, length=-1):
         """ decode value(char string pointer) to python string
         """

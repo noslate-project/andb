@@ -851,6 +851,12 @@ class Target:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        """ Get address of symbol. 
+        """
+        raise NotImplementedError()
+ 
     """ String in andb
         andb.dbg can read one-byte or two-byte char string from memory.
         ReadCStr supports read (utf-8/ascii) strings, 
@@ -858,7 +864,6 @@ class Target:
         
         return: inner python unicode string
     """
-
     @classmethod
     def ReadCStr(cls, address, length=-1):
         """ covert cstring (in memory) to python string

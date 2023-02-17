@@ -521,6 +521,15 @@ class Target(intf.Target):
         return int(v)
 
     @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        s = target.FindSymbols(symbol_name)
+        if not s.IsValid():
+            return None
+        
+        addr = s[0].symbol.addr.GetLoadAddress(target)
+        return int(addr)
+
+    @classmethod
     def GetThreads(cls):
         rob = []
         #process = lldb.debugger.GetSelectedTarget().process
