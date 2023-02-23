@@ -14,7 +14,7 @@ class TechReport(object):
     def ShowTextReport(self, filename):
         """Show TSR in Text format.
         """
-        with open(filename, "") as f
+        with open(filename) as f:
             tsr = json.load(f) 
         
         print("Core")
