@@ -6,23 +6,56 @@ import sys
 import json
 import time
 
+def md5(fname):
+    import hashlib
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(1024*1024), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
 class TechReport(object):
 
     def __init__(self, corefile):
         self._core = corefile 
 
+    @classmethod
     def ShowTextReport(self, filename):
         """Show TSR in Text format.
         """
         with open(filename) as f:
             tsr = json.load(f) 
         
-        print("Core")
-        print("filename: %s" % tsr['corefile'])
-        print("filesize: %d" % tsr['coresize'])
+        print("Report")
+        print("tsr_file: %s" % tsr['tsr_file'])
         print("created_time: %s" % tsr['create_time'])
-        print("Signal Info")
+       
+        print("Corefile")
+        print("file: %s" % tsr['file']['name'])
+        print("size: %d" % tsr['file']['size'])
+        print("md5: %s" % tsr['file']['md5'])
         
+        core = tsr['core'] 
+        
+        print("Signal")
+        siginfo = core['siginfo']
+        print("si_signo: %d" % siginfo['si_signo']) 
+        print("si_code: %d" % siginfo['si_code']) 
+        print("si_errno: %d" % siginfo['si_errno']) 
+        print("si_addr: %d" % siginfo['addr']) 
+
+        print("Memory Map")
+        mmap = core['mmap']
+        for m in mmap:
+            if m['p_memsz'] == 0: continue
+            print("%x-%x %x %d" % (m['p_vaddr'], m['p_vaddr'] + m['p_memsz'], m['p_flags'], m['p_memsz']))
+
+    def GenerateFileInfo(self):
+        out = {}
+        out['name'] = self._core.filename
+        out['size'] = self._core.filesize
+        out['md5'] = md5(self._core.filename) 
+        return out
 
     def GenerateCoreInfo(self):
         """Generate Corefile Info.
@@ -51,11 +84,12 @@ class TechReport(object):
         """Generate the TSR.
         """
         out = {}
-        
-        out['corefile'] = self._core.filename
-        out['coresize'] = self._core.filesize
+       
+        out['tsr_file'] = savefile 
         out['create_time'] = time.strftime("%Y-%m-%d %H:%M:%S %z")
-        out['coreinfo'] = self.GenerateCoreInfo()
+       
+        out['file'] = self.GenerateFileInfo()
+        out['core'] = self.GenerateCoreInfo()
         out['andb'] = self.GenerateAndbInfo()
 
         with open(savefile, 'w') as f:

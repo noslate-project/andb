@@ -223,11 +223,14 @@ def MapReduce():
 if __name__ == '__main__':
 
     # Generate Technical Support Report.
-    if args.tsr and args.core:
+    if args.tsr:
         from andb.loader import TechReport
-        rpt = TechReport(corefileFmt)
-        rpt.Generate("%s.tsr" % args.core)
-        exit(0)
+        if args.core:
+            rpt = TechReport(corefileFmt)
+            rpt.Generate("%s.tsr" % args.core)
+        elif args.binary:
+            TechReport.ShowTextReport(args.binary)
+            exit(0)
 
     # map reduce mode
     if args.mode:
