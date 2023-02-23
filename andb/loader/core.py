@@ -80,7 +80,9 @@ class Corefile(object):
         """Get NT_FILE info from corefile.
         """
         files = self._coreElf.GetNtFiles()
-       
+        if files is None:
+            return []
+
         shared_libs = {}
         for f in files:
             if len(f['name']) < 3:

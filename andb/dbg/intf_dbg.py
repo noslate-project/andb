@@ -616,10 +616,16 @@ class Symval:
         self.sym = sym
         self.val = val
 
+    def Flatten(self):
+        return [str(self.sym), str(self.val)]
+
+    def __repr__(self):
+        return "%s=%s" % (str(self.sym), str(self.val))
+
     def __str__(self):
         return "%s=%s" % (str(self.sym), str(self.val))
 
-class Frame:
+class Frame(object):
     """ represent a stack frame in thread
     """
     _I_frame = None
@@ -629,9 +635,21 @@ class Frame:
             self._I_frame = frame._I_frame
         else:
             self._I_frame = frame
-    
-    def ReadAddress(self, address, size):
+  
+    def IsValue(self):
+        """Is Value
+        """
         raise NotImplementedError()
+
+    def GetFunctionName(self):
+        """Get Function name
+        """
+        raise NotImplementedError()
+
+    #def ReadAddress(self, address, size):
+    #    """Read memory address by size
+    #    """
+    #    raise NotImplementedError()
 
     def GetSP(self):
         """ get stack pointer from the Frame
@@ -689,6 +707,26 @@ class Frame:
                     position)
 
         return "0x%016x %s(%s)" % (self.GetPC(), function_name, args.join(','))
+
+    def Flatten(self):
+        out = {}
+        def trycall(fn, dv=None):
+            try:
+                v = fn()
+            except:
+                pass
+            if v is None and dv is not None:
+                return dv
+            return v
+
+        out['fp'] = trycall(self.GetFP)
+        out['sp'] = trycall(self.GetSP)
+        out['function_name'] = trycall(self.GetFunctionName)
+        out['position'] = trycall(self.GetPosition)
+        out['args'] = [ x.Flatten() for x in trycall(self.GetArgs, dv=[]) ] 
+        out['locals'] = [ x.Flatten() for x in trycall(self.GetLocals, dv=[]) ]
+
+        return out
 
 class MemoryRegionInfo:
     """ represent a memory region entry

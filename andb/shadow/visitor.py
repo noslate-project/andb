@@ -673,7 +673,7 @@ class NodeEnvGuesser:
     def GetMeta(cls):
         addr = dbg.Target.ReadSymbolAddress("node::per_process::metadata")
         m = node.Metadata(addr)
-        return m.PrettyPrint()
+        return m.Flatten()
 
 class StackVisitor:
     """ Visit Stack """
@@ -694,6 +694,9 @@ class StackVisitor:
     def Backtrace(self):
         #dbg.Target.WalkStackFrames(self.frame)
         dbg.Thread.BacktraceCurrent(self.parse)
+
+    def GetV8Frames(self):
+        return dbg.Thread.GetV8Frames(self.parse)
 
 
 class StringVisitor(object):

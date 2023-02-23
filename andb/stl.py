@@ -137,5 +137,8 @@ class String(object):
     def _M_p(self):
         return self._val['_M_dataplus']['_M_p']
 
+    def toString(self):
+        return self._M_p.GetCString()
+
     def __str__(self):
         return self._M_p.GetCString()

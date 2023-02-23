@@ -438,6 +438,25 @@ class Thread(intf.Thread):
             f = f.older()
         v8_unwinder.Disable()
 
+    @classmethod
+    def GetV8Frames(self, parser):
+        out = []
+        v8_unwinder.Enable()
+        f = gdb.newest_frame()
+        for i in range(1000):
+            if f is None:
+                break
+            
+            frame = Frame(f)
+            v8f = parser(frame)
+            if v8f:
+                out.append(v8f.Flatten())
+            else:
+                out.append(frame.Flatten())
+            f = f.older()
+        v8_unwinder.Disable()
+        return out
+
 class Symval(intf.Symval):
     pass 
 
@@ -478,7 +497,7 @@ class Frame(intf.Frame):
         frame_locals = dec.frame_locals()
         if frame_locals is None: return []
         for i in frame_locals:
-            print(i)
+            #print(i)
             out.append(Symval(i.symbol(), i.value()))
         return out
  

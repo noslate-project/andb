@@ -28,9 +28,20 @@ class Metadata(Struct):
     """
     _typeName = "node::Metadata"
 
-    def PrettyPrint(self):
-        arch = stl.String(self['arch']) 
-        print(arch)
+    def Flatten(self):
+        out = {}
+
+        out['versions'] = {}
+        versions = self['versions']
+        for i in ('node', 'v8', 'uv', 'zlib', 'napi'):
+            v = stl.String(versions[i])
+            out['versions'][i] = v.toString()
+        
+        arch = stl.String(self['arch']).toString() 
+        platform = stl.String(self['platform']).toString() 
+        out['arch'] = arch
+        out['platform'] = platform
+        return out 
 
 class Environment(Struct):
     _typeName = "node::Environment"
