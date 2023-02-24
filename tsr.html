@@ -65,7 +65,7 @@ if (tsr_url != null) {
     document.querySelector("#load-box").style.display = 'block';
 }
 
-function thX(v) {
+function thX(...v) {
     let html = '<tr class="h">';
     v.forEach((el) => {
         html += '<th class="">' + el + '</th>'
@@ -131,9 +131,9 @@ class TSR {
         let html = '<a name="nt-files"></a>';
         html += '<h2>NT-FILES</h2>';
         html += '<table border="0" cellpadding="3" width="600">';
-        html += thX(['start_addr', 'end_addr', 'name']);
+        html += thX('start_addr', 'end_addr', 'name', 'build_id');
         x.forEach(el => {
-            html += tdX(el['start_addr'].toString(16), el['end_addr'].toString(16), el['name']);
+            html += tdX(el['start_addr'].toString(16), el['end_addr'].toString(16), el['name'], el['build_id']);
         });
         html += '</table><br />';
         return html;
@@ -144,12 +144,12 @@ class TSR {
         let html = '<a name="core-mmap"></a>';
         html += '<h2>mmap</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
-        html += thX(['start_addr', 'end_addr', 'flag', 'type', 'size', 'note']);
+        html += thX('start_addr', 'end_addr', 'flag', 'type', 'size', 'note');
         const flag_str = (v) => {
             const flags = 'rwxp';
             let out = "";
             for (var i=0; i<4; i++) {
-                if (v&1) {
+                if (v & 1) {
                     out += flags.atChar(i);
                 } else {
                     out += '-';
@@ -212,7 +212,7 @@ class TSR {
         let html = '<a name="v8_bt"></a>';
         html += '<h2>V8 Backtrace</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
-        html += thX(['#', 'pc',  'function', 'sp']);
+        html += thX('#', 'pc',  'function', 'sp');
         const desc_str = (v) => {
             return v['function_name']; 
         };
