@@ -212,13 +212,13 @@ class TSR {
         let html = '<a name="v8_bt"></a>';
         html += '<h2>V8 Backtrace</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
-        html += thX(['frame', 'Function', 'sp']);
+        html += thX(['#', 'pc',  'function', 'sp']);
         const desc_str = (v) => {
             return v['function_name']; 
         };
         x.forEach((el, idx) => {
             var desc = desc_str(el);
-            html += tdX(`#${idx} ` + el['fp'].toString(16), desc, el['sp'].toString(16));
+            html += tdX(`#${idx} `, el['fp'].toString(16), desc, el['sp'].toString(16));
         });
         html += '</table><br />';
         return html;
