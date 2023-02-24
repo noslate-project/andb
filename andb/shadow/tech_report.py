@@ -7,10 +7,10 @@ import json
 import andb.dbg as dbg
 import andb.v8 as v8
 import andb.node as node
-from .visitor import StackVisitor 
+from .visitor import StackVisitor, NodeEnvGuesser
 
 from andb.utility import (
-    profiler, 
+    profiler,
     Logging as log,
 )
 
@@ -38,8 +38,9 @@ class AndbTechReport(object):
 
     @property
     def node_version(self):
-        pass
-   
+        meta = NodeEnvGuesser.GetMeta()
+        return meta
+
     def GenerateV8Heap(self):
         pass
 
@@ -53,11 +54,11 @@ class AndbTechReport(object):
     def Generate(self, savefile="core.v8tsr"):
         out = {}
 
-        out['node_version']  = self.node_version 
+        out['node_version']  = self.node_version
 
         out['v8'] = {}
         self.GenerateV8Backtrace(out)
 
         with open(savefile, 'w') as f:
             json.dump(out, f)
-   
+

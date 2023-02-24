@@ -7,7 +7,7 @@ import andb.v8 as v8
 import andb.node as node
 
 from andb.utility import (
-    profiler, 
+    profiler,
     Logging as log,
 )
 
@@ -16,7 +16,7 @@ from andb.utility import (
 class IsolateGuesser:
     """ guess an isolate address from core.
     """
-    _isolate_addr_map = {} 
+    _isolate_addr_map = {}
 
     def SetIsolate(self, iso):
         v8.Isolate.SetCurrent(iso)
@@ -48,10 +48,10 @@ class IsolateGuesser:
 
             # get low addres from 'sp'
             low = t.GetFrameTop().GetSP()
-            
+
             # search for memory region of 'sp'
             mri = dbg.Target.GetMemoryRegions().Search(low)
-            
+
             # stack range
             high = mri.end_address
 
@@ -89,7 +89,7 @@ class IsolateGuesser:
                     # found
                     #print(iso)
                     self.SetIsolate(iso)
-                    return iso 
+                    return iso
         return None
 
     def ListFromPages(self):
@@ -104,7 +104,7 @@ class IsolateGuesser:
                 if iso is None:
                     continue
                 else:
-                    # Add Isolate 
+                    # Add Isolate
                     self.GetIsolate(iso)
         self.ShowIsolates()
         return None
@@ -115,10 +115,10 @@ class IsolateGuesser:
 
             # get low addres from 'sp'
             low = t.GetFrameTop().GetSP()
-            
+
             # search for memory region of 'sp'
             mri = dbg.Target.GetMemoryRegions().Search(low)
-            
+
             # stack range
             high = mri.end_address
 
@@ -139,7 +139,7 @@ class IsolateGuesser:
                     break
         self.ShowIsolates()
         return None
-    
+
     def guess_from_tls(self):
         """ guess from thread local storage """
         #key = gdb.parse_and_eval('(int)v8::internal::Isolate::isolate_key_')
@@ -166,7 +166,7 @@ class IsolateGuesser:
     def GetIsolateById(self, idx):
         for k,v in self._isolate_addr_map.items():
             if v.id == idx:
-                return v 
+                return v
         return None
 
     def FindIsolate(self, iso):
@@ -199,7 +199,7 @@ class IsolateGuesser:
     def ListIsolates(self):
         if len(self._isolate_addr_map) < 1:
             self.ListFromPages()
-            return 
+            return
         self.ShowIsolates()
 
     def BatchHeapSnapshot(self):
@@ -225,7 +225,7 @@ class HeapVisitor:
         iso = v8.Isolate.GetCurrent()
         if iso is None:
             log.error('isolate is not set.')
-            raise Exception('isolate is not set.') 
+            raise Exception('isolate is not set.')
         self._heap = v8.Heap(iso['heap_'].AddressOf())
 
     """ Private
@@ -274,7 +274,7 @@ class HeapVisitor:
             self.PrintChunk(chunk)
             cnt += 1
         print("Total %d pages." % cnt)
-    
+
     def SpaceWalkObject(self, space_name):
         hp = self._heap
         space = hp.getSpace(space_name)
@@ -330,7 +330,7 @@ class HeapVisitor:
     def ShowMapSummary(self, argv):
         if argv[0] == "type":
             return self.ShowInstanceSummary(argv)
-        
+
         self._map_tbl = {}
         hp = self._heap
         space = hp.getSpace(argv[0])
@@ -386,7 +386,7 @@ class HeapVisitor:
         space = hp.getSpace(argv[0])
         if space is None:
             return
-        
+
         # get type filter
         for_type = None
         if len(argv) > 2 and argv[1] == 'type':
@@ -448,7 +448,7 @@ class HeapVisitor:
 
     #@profiler
     def HeapFind(self, argv):
-        """ heap find 
+        """ heap find
         """
         hp = self._heap
         space = hp.getSpace(argv[0])
@@ -469,7 +469,7 @@ class HeapVisitor:
         print("find %d" % cnt);
 
     def ShowGlobal(self, args):
-        """ show JSGlobalObject 
+        """ show JSGlobalObject
         """
         self.ShowGlobalObject()
 
@@ -477,12 +477,12 @@ class HeapVisitor:
         if argv is None:
             print("heap map <space> <tag>")
             return None
-        
+
         hp = self._heap
         space = hp.getSpace(argv[0])
         if space is None:
             return
-      
+
         tag_to_find = int(argv[1], 16)
         tbl = self._map_tbl
         if space.isNewSpace():
@@ -499,8 +499,8 @@ class HeapVisitor:
                     print ("0x%x : size(%d) [ %s %s ]" % (obj.tag, size, "brief failed", e))
 
     def FollowTag(self, argv):
-        all = {} 
-        save = {} 
+        all = {}
+        save = {}
         done = {}
         if argv is None:
             print("heap follow <tag>")
@@ -511,21 +511,21 @@ class HeapVisitor:
             print("not a heapobject")
             return None
 
-        max_deep = 0 
+        max_deep = 0
         if len(argv) > 1:
             max_deep = int(argv[1])
 
         total_size = 0
         deep = 0
-        save[ho.address] = 1 
+        save[ho.address] = 1
 
         while len(save) > 0:
             all = save
-            save = {} 
+            save = {}
             for tag in all:
                 ho = v8.HeapObject(tag)
                 done[ho.address] = 1
-                
+
                 for tag in ho.Slots():
                     o = v8.HeapObject(tag)
                     if o.address in done:
@@ -538,10 +538,10 @@ class HeapVisitor:
                         total_size += o.Size()
                     except:
                         t = None
-   
+
                     if t is None or v8.InstanceType.Name(t) is None:
                         continue
-                    
+
                     if v8.InstanceType.isFixedArray(t) or \
                        v8.InstanceType.inRange("FIRST_JS_OBJECT_TYPE", "LAST_JS_OBJECT_TYPE", t) or \
                        v8.InstanceType.inRange("FIRST_HASH_TABLE_TYPE", "LAST_HASH_TABLE_TYPE", t) or \
@@ -552,8 +552,8 @@ class HeapVisitor:
             deep += 1
             if max_deep and deep > max_deep:
                 break
-      
-        tbl = {} 
+
+        tbl = {}
         tbl.clear()
         for tag in done:
             obj = v8.HeapObject(tag)
@@ -568,7 +568,7 @@ class HeapVisitor:
 
         for i in (sorted(tbl.items(), key = lambda v:(v[1], v[0]), reverse = False)):
             print(" %4d: %8d %12d %s" % (i[0], i[1][0], i[1][1], v8.InstanceType.Name(i[0])))
-  
+
         print("objects:", len(done))
         print("follow_size:", total_size)
 
@@ -603,12 +603,12 @@ class ObjectVisitor:
         if v8.Smi.IsValid(v):
             print("SMI: %d" % int(v8.Smi(v)))
             return v
-        
+
         # HeapObject
         if not v8.HeapObject.IsValid(v):
             return v
-       
-        o = v8.HeapObject(v) 
+
+        o = v8.HeapObject(v)
         cls.showHeapObj(o)
 
     @classmethod
@@ -646,7 +646,7 @@ class ObjectVisitor:
 
 class NodeEnvGuesser:
     """ guess a node::Environment address from v8 """
-   
+
     def __init__(self):
         iso = v8.Isolate.GetCurrent()
         if iso is None:
@@ -705,8 +705,8 @@ class StringVisitor(object):
     def SaveFile(cls, tag, file_to_save = None):
         o = v8.String(tag)
         if not v8.InstanceType.isString(o.instance_type):
-            print("only support String object") 
-            return 
+            print("only support String object")
+            return
 
         return o.SaveFile(file_to_save)
 
@@ -718,7 +718,7 @@ class StringVisitor(object):
         if space is None:
             return
 
-        cnt = 0 
+        cnt = 0
         size = 0
         sz = argv[1]
         print("find %s" % sz)
@@ -731,10 +731,10 @@ class StringVisitor(object):
             v = o.to_string()[:l]
             if not v.startswith(sz):
                 continue
-            
+
             cnt += 1
             size += obj.Size()
-            
+
             f = o.SaveFile()
             print("%d: %10u %s" % (cnt, size, f))
 
@@ -749,7 +749,7 @@ class TestVisitor(object):
         space = hp.getSpace(argv[0])
         if space is None:
             return
-       
+
         tbl = {}
         iterator = v8.PagedSpaceObjectIterator(space)
         for obj in iterator:
@@ -774,7 +774,7 @@ class TestVisitor(object):
         iso = v8.Isolate.GetCurrent()
         heap = iso.Heap()
         space = heap.getSpace('old')
-        
+
     @classmethod
     def ValueTest(cls, argv):
         from time import time
@@ -782,18 +782,18 @@ class TestVisitor(object):
         #iso = v8.Isolate.GetCurrent()
         #heap = iso.Heap()
         tag = int(argv[0], 16)
-        ptr = tag & ~v8.Internal.kHeapObjectTagMask 
+        ptr = tag & ~v8.Internal.kHeapObjectTagMask
 
         buf = dbg.Target.MemoryRead(ptr, 80)
 
         t = time()
         for i in range(1000000):
-            o = ptr 
+            o = ptr
         print("for %.3f" % (time()-t))
 
         t = time()
         for i in range(1000000):
-            o = object() 
+            o = object()
         print("object() %.3f" % (time()-t))
 
         t = time()
@@ -803,13 +803,13 @@ class TestVisitor(object):
 
         t = time()
         for i in range(1000000):
-            r = v8.ChunkBlock() 
+            r = v8.ChunkBlock()
             r.InitReader(ptr)
         print("ChunkBlock() %.3f" % (time()-t))
 
         t = time()
         for i in range(1000000):
-            r = v8.ChunkBlock() 
+            r = v8.ChunkBlock()
             r.InitReader(ptr)
             o = r.LoadU64(0)
         print("ChunkBlock().LoadU64 %.3f" % (time()-t))
@@ -844,7 +844,7 @@ class TestVisitor(object):
         #iso = v8.Isolate.GetCurrent()
         #heap = iso.Heap()
         tag = int(argv[0], 16)
-        ptr = tag & ~v8.Internal.kHeapObjectTagMask 
+        ptr = tag & ~v8.Internal.kHeapObjectTagMask
 
         count = 1000000
         t = time()

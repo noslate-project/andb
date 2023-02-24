@@ -230,7 +230,7 @@ if __name__ == '__main__':
             rpt.Generate("%s.tsr" % args.core)
         elif args.binary:
             TechReport.ShowTextReport(args.binary)
-            exit(0)
+        exit(0)
 
     # map reduce mode
     if args.mode:
