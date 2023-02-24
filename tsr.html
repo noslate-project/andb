@@ -131,9 +131,9 @@ class TSR {
         let html = '<a name="nt-files"></a>';
         html += '<h2>NT-FILES</h2>';
         html += '<table border="0" cellpadding="3" width="600">';
-        html += thX('start_addr', 'end_addr', 'name', 'build_id');
-        x.forEach(el => {
-            html += tdX(el['start_addr'].toString(16), el['end_addr'].toString(16), el['name'], el['build_id']);
+        html += thX('', 'start_addr', 'end_addr', 'name', 'build_id');
+        x.forEach((el, idx) => {
+            html += tdX(idx, el['start_addr'].toString(16), el['end_addr'].toString(16), el['name'], el['build_id']);
         });
         html += '</table><br />';
         return html;
@@ -144,13 +144,13 @@ class TSR {
         let html = '<a name="core-mmap"></a>';
         html += '<h2>mmap</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
-        html += thX('start_addr', 'end_addr', 'flag', 'type', 'size', 'note');
+        html += thX('#', 'start_addr', 'end_addr', 'flag', 'type', 'size', 'note');
         const flag_str = (v) => {
             const flags = 'rwxp';
             let out = "";
             for (var i=0; i<4; i++) {
                 if (v & 1) {
-                    out += flags.atChar(i);
+                    out += flags[i];
                 } else {
                     out += '-';
                 }
@@ -158,9 +158,9 @@ class TSR {
             }
             return out;
         };
-        x.forEach(el => {
+        x.forEach((el,idx) => {
             let end_addr = el['p_vaddr'] + el['p_memsz'];
-            html += tdX(el['p_vaddr'].toString(16), end_addr.toString(16), (el['p_flags']),  el['p_type'], el['p_memsz'], '');
+            html += tdX(idx, el['p_vaddr'].toString(16), end_addr.toString(16), flag_str(el['p_flags']),  el['p_type'], el['p_memsz'], '');
         }); 
         html += '</table><br />';
         return html;
@@ -218,7 +218,19 @@ class TSR {
         };
         x.forEach((el, idx) => {
             var desc = desc_str(el);
-            html += tdX(`#${idx} `, el['fp'].toString(16), desc, el['sp'].toString(16));
+            html += tdX(`#${idx} `, el['pc'].toString(16), desc, el['sp'].toString(16));
+        });
+        html += '</table><br />';
+        return html;
+    }
+
+    rAndbEnviron() {
+        const x = this.tsr['andb']['environ'];
+        let html = '<a name="environ"></a>';
+        html += '<h2>Environ Variables</h2>';
+        html += '<table border="0" cellpadding="3" width="600">';
+        x.forEach((el, idx) => {
+            html += tdX(idx, el);
         });
         html += '</table><br />';
         return html;
@@ -229,6 +241,7 @@ class TSR {
         let html = '<a name="andb"></a>';
         html += '<h1>Andb reveal</h1>';
         html += this.rAndbV8BackTrace();
+        html += this.rAndbEnviron();
         return html;
     }
 }
@@ -238,8 +251,8 @@ function LoadTsr(txt) {
     tsr = new TSR(txt);
     html += tsr.rFile();
     html += tsr.rAndbNodeVersion();
-    html += tsr.rCore();
     html += tsr.rAndb();
+    html += tsr.rCore();
     return html;
 }
 

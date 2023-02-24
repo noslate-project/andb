@@ -36,6 +36,11 @@ class AndbTechReport(object):
     def GetHeapInfo(self):
         pass
 
+    def GetEnviron(self):
+        env = dbg.Target.GetCurrentThread().GetEnviron()
+        print(env)
+        return env
+
     @property
     def node_version(self):
         meta = NodeEnvGuesser.GetMeta()
@@ -58,6 +63,7 @@ class AndbTechReport(object):
 
         out['v8'] = {}
         self.GenerateV8Backtrace(out)
+        out['environ'] = self.GetEnviron()
 
         with open(savefile, 'w') as f:
             json.dump(out, f)

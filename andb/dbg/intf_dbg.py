@@ -610,6 +610,9 @@ class Thread:
         """
         raise NotImplementedError()
 
+    def GetEnviron(self):
+        raise NotImplementedError()
+        
 class Symval:
 
     def __init__(self, sym, val):
@@ -719,7 +722,7 @@ class Frame(object):
                 return dv
             return v
 
-        out['fp'] = trycall(self.GetFP)
+        out['pc'] = trycall(self.GetPC)
         out['sp'] = trycall(self.GetSP)
         out['function_name'] = trycall(self.GetFunctionName)
         out['position'] = trycall(self.GetPosition)
