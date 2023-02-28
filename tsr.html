@@ -153,16 +153,11 @@ class TSR {
         html += '<table border="0" cellpadding="3" width="800">';
         html += thX('#', 'start_addr', 'end_addr', 'flag', 'type', 'size', 'note');
         const flag_str = (v) => {
-            const flags = 'rwxp';
             let out = "";
-            for (var i=0; i<4; i++) {
-                if (v & 1) {
-                    out += flags[i];
-                } else {
-                    out += '-';
-                }
-                v >>= 1;
-            }
+            out += v&4 ? 'r' : '-'; 
+            out += v&2 ? 'w' : '-'; 
+            out += v&1 ? 'x' : '-'; 
+            out += v&8 ? 's' : 'p'; 
             return out;
         };
         x.forEach((el,idx) => {
