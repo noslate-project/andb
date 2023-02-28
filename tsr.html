@@ -108,7 +108,7 @@ class TSR {
     _dict(tsr, blk) {
         let html = '';
         let o = tsr[blk];
-        for (var k in o) {
+        Object.keys(o).sort().forEach((k) =>{
             if (Object.prototype.toString.call(o[k]) === '[object Object]') {
                 html += this._dict(o, k);
             } else if (Array.isArray(o[k])) {
@@ -116,7 +116,7 @@ class TSR {
             } else {
                 html += tdX(k, o[k]);
             }
-        }
+        });
         return html;
     }
 
