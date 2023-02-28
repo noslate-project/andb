@@ -22,11 +22,11 @@ class AndbTechReport(object):
 
     def GetEnviron(self):
         env = dbg.Target.GetCurrentThread().GetEnviron()
+        
         def omit_secret(line):
             m = re.search("^(.*secret.*?)=(.*)", line, re.IGNORECASE)
             if m is None:
                 return line
-            print(m.groups())
             return m.group(1) + "=***"
 
         out = []
@@ -49,8 +49,6 @@ class AndbTechReport(object):
     def GenerateV8Backtrace(self, out):
         sv = StackVisitor()
         frames = sv.GetV8Frames()
-        for f in frames:
-            print(f)
         out['frames'] = frames
 
     def Generate(self, savefile="core.v8tsr"):
