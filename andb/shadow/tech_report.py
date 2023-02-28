@@ -3,11 +3,12 @@ from __future__ import print_function, division
 import sys
 import os
 import json
+import re
 
 import andb.dbg as dbg
 import andb.v8 as v8
 import andb.node as node
-from .visitor import StackVisitor, NodeEnvGuesser
+from .visitor import StackVisitor, NodeEnvGuesser, AworkerVisitor
 
 from andb.utility import (
     profiler,
@@ -19,31 +20,27 @@ class AndbTechReport(object):
     def __init__(self):
         pass
 
-    def GetThreadList(self):
-        pass
-
-    def v8bt(self):
-        """Return V8 Backtrace
-        """
-        pass
-
-    def GetIsolateList(self):
-        pass
-
-    def GetGlobalObjects(self):
-        pass
-
-    def GetHeapInfo(self):
-        pass
-
     def GetEnviron(self):
         env = dbg.Target.GetCurrentThread().GetEnviron()
-        print(env)
-        return env
+        def omit_secret(line):
+            m = re.search("^(.*secret.*?)=(.*)", line, re.IGNORECASE)
+            if m is None:
+                return line
+            print(m.groups())
+            return m.group(1) + "=***"
+
+        out = []
+        for l in env:
+            out.append(omit_secret(l))
+        return out 
 
     @property
     def node_version(self):
-        meta = NodeEnvGuesser.GetMeta()
+        meta = None
+        if NodeEnvGuesser.IsNode():
+            meta = NodeEnvGuesser.GetMeta()
+        elif AworkerVisitor.IsAworker():
+            meta = AworkerVisitor.GetMeta()
         return meta
 
     def GenerateV8Heap(self):

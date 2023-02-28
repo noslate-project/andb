@@ -219,17 +219,28 @@ def MapReduce():
     print('parse  {:.3f}s'.format(t2-t1))
     print('reduce {:.3f}s'.format(t3-t2))
 
-
+def TsrProcess():
+    loader = GetLoader(andb_dir)
+    loader.SetExec(binary)
+    loader.SetTyp(typfile)
+    loader.SetCore(args.core)
+    loader.BatchOn()
+    loader.AddCommandLine('andb tsr')
+    opts = loader.Opts()
+    os.spawnvp(os.P_WAIT, opts[0], opts)
+ 
 if __name__ == '__main__':
 
     # Generate Technical Support Report.
     if args.tsr:
-        from andb.loader import TechReport
+        from andb.loader import TechReport, TechReportText
         if args.core:
+            TsrProcess()
             rpt = TechReport(corefileFmt)
             rpt.Generate("%s.tsr" % args.core)
         elif args.binary:
-            TechReport.ShowTextReport(args.binary)
+            txt = TechReportText(args.binary)
+            txt.ShowAll()
         exit(0)
 
     # map reduce mode

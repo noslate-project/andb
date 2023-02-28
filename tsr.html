@@ -53,14 +53,16 @@ hr {width: 600px; background-color: #cccccc; border: 0px; height: 1px; color: #0
 const urlParams = new URLSearchParams(window.location.search);
 const tsr_url = urlParams.get('tsr')
 if (tsr_url != null) {
+    document.querySelector("#contents").innerHTML = "<p>loading...</p>";
+    document.querySelector("#contents").style.display = 'block';
     fetch(tsr_url).then(response => response.text()).then((text) => {
         document.querySelector("#contents").innerHTML = LoadTsr(text);
-        document.querySelector("#contents").style.display = 'block';
-    }).catch(rejected => {
+    });
+    /*.catch(rejected => {
         console.log('failed to fetch tsr URL');
         document.querySelector("#contents").innerHTML = "<p>tsr not loaded.</p>";
         document.querySelector("#contents").style.display = 'block';
-    });
+    })*/
 } else {
     document.querySelector("#load-box").style.display = 'block';
 }
@@ -81,53 +83,58 @@ function tdX(name, ...v) {
     return html + '</tr>';
 }
 
+function xp(tsr, path, def=undefined) {
+    let x = tsr;
+    try {
+        path.split('/').forEach((v) => {
+            x = x[v]
+        });
+        return x;
+    } catch (e) {
+        // nothing
+    } 
+    return def;
+}
+
 class TSR {
     constructor(txt) {
         this.tsr = JSON.parse(txt);
     }
 
-    rCoreSigInfo() {
-        const x = this.tsr['core']['siginfo'];
-        let html = '<a name="nt-siginfo"></a>';
-        html += '<h2>NT-SIGINFO</h2>';
-        html += '<table border="0" cellpadding="3" width="600">';
-        html += tdX('si_signo', x['si_signo'], '');
-        html += tdX('si_code', x['si_code'], '');
-        html += tdX('si_errno', x['si_errno'], '');
-        html += tdX('si_addr', x['addr'], '');
-        html += '</table><br />';
-        return html;       
-
+    _list(root, blk, title=undefined) {
+        let html = '';
     }
 
-    rCorePrStatus() {
-        const x = this.tsr['core']['prstatus'];
-        let html = '<a name="nt-prstatus"></a>';
-        html += '<h2>NT-PRSTATUS</h2>';
-        html += '<table border="0" cellpadding="3" width="600">';
-        const els = ['si_signo', 'si_code', 'si_errno', 'pr_cursig', 'pr_sigpend', 'pr_sighold', 'pr_pid', 'pr_ppid', 'pr_pgrp', 'pr_sid', 'pr_utime', 'pr_stime', 'pr_cutime', 'pr_cstime'];
-        els.forEach(el => {
-            html += tdX(el, x[el]);
-        });
-        html += '</table><br />';
-        return html;       
+    _dict(tsr, blk) {
+        let html = '';
+        let o = tsr[blk];
+        for (var k in o) {
+            if (Object.prototype.toString.call(o[k]) === '[object Object]') {
+                html += this._dict(o, k);
+            } else if (Array.isArray(o[k])) {
+                html += this._list(o, k);
+            } else {
+                html += tdX(k, o[k]);
+            }
+        }
+        return html;
     }
 
-    rCorePrPsInfo() {
-        const x = this.tsr['core']['prpsinfo'];
-        let html = '<a name="nt-prpsinfo"></a>';
-        html += '<h2>NT-PRPSINFO</h2>';
+    rDict(tsr, blk) {
+        if (!(blk in tsr)) {
+            return ""; 
+        }
+        let title = blk;
+        let html = `<a name="${title}"></a>`;
+        html += `<h2>${title}</h2>`;
         html += '<table border="0" cellpadding="3" width="600">';
-        const els = ['pr_state', 'pr_sname', 'pr_zomb', 'pr_nice', 'pr_flag', 'pr_uid', 'pr_gid', 'pr_pid', 'pr_ppid', 'pr_pgrp', 'pr_sid', 'pr_fname', 'pr_psargs'];
-        els.forEach(el => {
-            html += tdX(el, x[el]);
-        });
+        html += this._dict(tsr, blk);
         html += '</table><br />';
         return html;       
     }
 
     rCoreNtFiles() {
-        const x = this.tsr['core']['files'];
+        const x = xp(this.tsr, 'core/files', []);
         let html = '<a name="nt-files"></a>';
         html += '<h2>NT-FILES</h2>';
         html += '<table border="0" cellpadding="3" width="600">';
@@ -140,7 +147,7 @@ class TSR {
     }
 
     rCoreMMap() {
-        const x = this.tsr['core']['mmap'];
+        const x = xp(this.tsr, 'core/mmap', []);
         let html = '<a name="core-mmap"></a>';
         html += '<h2>mmap</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
@@ -167,12 +174,15 @@ class TSR {
     }
 
     rCore() {
-        const tsr = this.tsr;
+        if (!('core' in this.tsr)) {
+            return;
+        }
+        const core = this.tsr['core'];
         let html = '<a name="core"></a>';
         html += '<h1>Corefile details</h1>';
-        html += this.rCoreSigInfo();
-        html += this.rCorePrStatus();
-        html += this.rCorePrPsInfo();
+        html += this.rDict(core, 'siginfo');
+        html += this.rDict(core, 'prstatus');
+        html += this.rDict(core, 'prpsinfo');
         html += this.rCoreNtFiles();
         html += this.rCoreMMap();
         return html;
@@ -192,23 +202,11 @@ class TSR {
     }
    
     rAndbNodeVersion() {
-        const x = this.tsr['andb']['node_version'];
-        let html = '<a name="node_version"></a>';
-        html += '<h2>Node Version</h2>';
-        html += '<table border="0" cellpadding="3" width="600">';
-        html += tdX('platform',  x['platform']);
-        html += tdX('arch',  x['arch']);
-        const y = x['versions'];
-        const els = ['node', 'v8', 'uv', 'zlib', 'napi'];
-        els.forEach(el => {
-            html += tdX(el, y[el]);
-        });
-        html += '</table><br />';
-        return html;
+        return this.rDict(this.tsr['andb'], 'node_version');
     }
 
     rAndbV8BackTrace() {
-        const x = this.tsr['andb']['frames'];
+        const x = xp(this.tsr, 'andb/frames', []);
         let html = '<a name="v8_bt"></a>';
         html += '<h2>V8 Backtrace</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
@@ -225,7 +223,7 @@ class TSR {
     }
 
     rAndbEnviron() {
-        const x = this.tsr['andb']['environ'];
+        const x = xp(this.tsr, 'andb/environ', []);
         let html = '<a name="environ"></a>';
         html += '<h2>Environ Variables</h2>';
         html += '<table border="0" cellpadding="3" width="600">';

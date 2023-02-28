@@ -5,6 +5,7 @@ import sys
 import andb.dbg as dbg
 import andb.v8 as v8
 import andb.node as node
+import andb.aworker as aworker
 
 from andb.utility import (
     profiler,
@@ -573,7 +574,6 @@ class HeapVisitor:
         print("follow_size:", total_size)
 
 
-
 class ObjectVisitor:
     """
         v8 object  convenient visitor
@@ -646,6 +646,7 @@ class ObjectVisitor:
 
 class NodeEnvGuesser:
     """ guess a node::Environment address from v8 """
+    
 
     def __init__(self):
         iso = v8.Isolate.GetCurrent()
@@ -654,6 +655,10 @@ class NodeEnvGuesser:
             raise Exception
         self._heap = v8.Heap(iso['heap_'].AddressOf())
 
+    @classmethod
+    def IsNode(cls):
+        return node.IsNode()
+    
     def SetNodeEnv(self, pyo_node_env):
         node.Environment.SetCurrent(node.Environment(pyo_node_env))
         dbg.ConvenienceVariables.Set('node_env', pyo_node_env._I_value)
@@ -674,6 +679,20 @@ class NodeEnvGuesser:
         addr = dbg.Target.ReadSymbolAddress("node::per_process::metadata")
         m = node.Metadata(addr)
         return m.Flatten()
+
+class AworkerVisitor:
+
+    @classmethod
+    def IsAworker(cls):
+        return aworker.IsAworker()
+
+    @classmethod
+    def GetMeta(cls):
+        addr = dbg.Target.ReadSymbolAddress("aworker::per_process::metadata")
+        print(addr)
+        m = aworker.Metadata(addr)
+        return m.Flatten()
+
 
 class StackVisitor:
     """ Visit Stack """
