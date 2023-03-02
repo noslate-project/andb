@@ -10,7 +10,7 @@ table {border-collapse: collapse;}
 .center {text-align: center;}
 .center table { margin-left: auto; margin-right: auto; text-align: left;}
 .center th { text-align: center !important; }
-td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline;}
+td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline; min-width: 30px;}
 h1 {font-size: 150%;}
 h2 {font-size: 125%;}
 h3 {font-size: 100%;}
@@ -96,7 +96,16 @@ function xp(tsr, path, def=undefined) {
     return def;
 }
 
-class TSR {
+function escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+ }
+
+ class TSR {
     constructor(txt) {
         this.tsr = JSON.parse(txt);
     }
@@ -207,10 +216,30 @@ class TSR {
         html += '<table border="0" cellpadding="3" width="800">';
         html += thX('#', 'pc',  'function', 'sp');
         const desc_str = (v) => {
-            return v['function_name']; 
+            let fName = v['function_name'];
+            if (fName == null || fName == "") {
+                fName = "(anonymous)";
+            }
+            let sArgs = "";
+            v['args'].forEach((el, idx) => {
+                if (idx != 0) {
+                    sArgs += ", ";
+                }
+                sArgs += el[0] + "=" + el[1];
+                console.log(el[1])
+            });
+            let sPos = "";
+            if (v['position'] && v['position'][0] != null) {
+                sPos = 'at ' + v['position'][0] + ':' + v['position'][1];
+            }
+            if (fName[0] == '<') {
+                return fName;
+            }
+            return `${fName} (${sArgs}) ${sPos}`;
         };
+
         x.forEach((el, idx) => {
-            var desc = desc_str(el);
+            let desc = escapeHtml(desc_str(el));
             html += tdX(`#${idx} `, el['pc'].toString(16), desc, el['sp'].toString(16));
         });
         html += '</table><br />';
@@ -221,7 +250,7 @@ class TSR {
         const x = xp(this.tsr, 'andb/environ', []);
         let html = '<a name="environ"></a>';
         html += '<h2>Environ Variables</h2>';
-        html += '<table border="0" cellpadding="3" width="600">';
+        html += '<table border="0" cellpadding="3" style="word-wrap:break-word; word-break:break-all;" width="800">';
         x.forEach((el, idx) => {
             html += tdX(idx, el);
         });
