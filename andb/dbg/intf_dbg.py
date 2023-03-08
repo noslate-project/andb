@@ -610,16 +610,25 @@ class Thread:
         """
         raise NotImplementedError()
 
+    def GetEnviron(self):
+        raise NotImplementedError()
+        
 class Symval:
 
     def __init__(self, sym, val):
         self.sym = sym
         self.val = val
 
+    def Flatten(self):
+        return [str(self.sym), str(self.val)]
+
+    def __repr__(self):
+        return "%s=%s" % (str(self.sym), str(self.val))
+
     def __str__(self):
         return "%s=%s" % (str(self.sym), str(self.val))
 
-class Frame:
+class Frame(object):
     """ represent a stack frame in thread
     """
     _I_frame = None
@@ -629,9 +638,21 @@ class Frame:
             self._I_frame = frame._I_frame
         else:
             self._I_frame = frame
-    
-    def ReadAddress(self, address, size):
+  
+    def IsValue(self):
+        """Is Value
+        """
         raise NotImplementedError()
+
+    def GetFunctionName(self):
+        """Get Function name
+        """
+        raise NotImplementedError()
+
+    #def ReadAddress(self, address, size):
+    #    """Read memory address by size
+    #    """
+    #    raise NotImplementedError()
 
     def GetSP(self):
         """ get stack pointer from the Frame
@@ -689,6 +710,26 @@ class Frame:
                     position)
 
         return "0x%016x %s(%s)" % (self.GetPC(), function_name, args.join(','))
+
+    def Flatten(self):
+        out = {}
+        def trycall(fn, dv=None):
+            try:
+                v = fn()
+            except:
+                pass
+            if v is None and dv is not None:
+                return dv
+            return v
+
+        out['pc'] = trycall(self.GetPC)
+        out['sp'] = trycall(self.GetSP)
+        out['function_name'] = trycall(self.GetFunctionName)
+        out['position'] = trycall(self.GetPosition)
+        out['args'] = [ x.Flatten() for x in trycall(self.GetArgs, dv=[]) ] 
+        out['locals'] = [ x.Flatten() for x in trycall(self.GetLocals, dv=[]) ]
+
+        return out
 
 class MemoryRegionInfo:
     """ represent a memory region entry
@@ -851,6 +892,12 @@ class Target:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        """ Get address of symbol. 
+        """
+        raise NotImplementedError()
+ 
     """ String in andb
         andb.dbg can read one-byte or two-byte char string from memory.
         ReadCStr supports read (utf-8/ascii) strings, 
@@ -858,7 +905,6 @@ class Target:
         
         return: inner python unicode string
     """
-
     @classmethod
     def ReadCStr(cls, address, length=-1):
         """ covert cstring (in memory) to python string

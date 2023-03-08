@@ -1,8 +1,11 @@
 
 from __future__ import print_function
 
+import os
 from mmap import mmap, ACCESS_READ, ACCESS_WRITE, PAGESIZE
 import struct
+
+import andb.py23 as py23
 
 class Enum:
    
@@ -26,9 +29,43 @@ def ReadCStr(sec):
             return "".join(sz) 
         sz.append(c)
 
+def roundup(x, up):
+    y = (x - 1) // 4 + 1
+    return y*up 
+
+
 class Elf:
+    
+    # file opened
+    _I_file = None
+  
+    # mmap fd 
+    _I_mmap = None
+    
+    # instance base offset from mmap front
+    _I_offset = None 
+
+    # last saved offset
+    _saved_offset = 0
+
+    # elf header
+    _ehdr = None
+
+    # program headers
+    _phdrs = None
+
+    # section headers
+    _shdrs = None
+
+    # string table
+    _strtab = None
+
+    # notes
+    _notes = None
 
     class SHTYPE(Enum):
+        """Section Header Type
+        """
         NULL_TYPE = 0
         PROGBITS = 1
         SYMTAB = 2
@@ -48,11 +85,22 @@ class Elf:
         SYMTAB_SHNDX = 18
 
     class PHTYPE(Enum):
+        """Program Header Type
+        """
         NOTE = 0x00000004
 
     class NTYPE(Enum):
+        """Note Header Type
+        """
         NT_GNU_BUILD_ID = 3
-
+        NT_PRSTATUS = 1
+        NT_PRFPREG = 2
+        NT_PRPSINFO = 3
+        NT_TASKSTRUCT = 4
+        NT_AUXV = 6
+        NT_SIGINFO = 0x53494749
+        NT_FILE = 0x46494c45
+    
     class Section:
         """ represents a Section in Elf file. """
 
@@ -137,12 +185,36 @@ class Elf:
             self.Seek(index)
             return ReadCStr(self) 
 
-    def ReadEhdr(self, fd, elfhdr):
-        """ parse elf header """
+    """Begin Elf methods.
+    """
+    def Seek(self, offset):
+        """Seek in relative offset with retore.
+        """
+        m = self._I_mmap
+        self._saved_offset = m.tell()
+        x = self._I_offset + offset
+        m.seek(x)
+        return m
+
+    def Restore(self):
+        """Retore last seek.
+        """
+        m = self._I_mmap
+        m.seek(self._saved_offset)
+        return m
+
+    def GetEhdr(self):
+        """parse elf header 
+        """
+        if self._ehdr:
+            return self._ehdr
 
         sd = '2HI3QI6H'
         size = struct.calcsize(sd)
-        t = struct.unpack(sd, fd.read(size))
+
+        m = self.Seek(16) 
+        t = struct.unpack(sd, m.read(size))
+        elfhdr = {}
         elfhdr['e_type']= t[0]
         elfhdr['e_machine'] = t[1]
         elfhdr['e_version'] = t[2]
@@ -155,19 +227,27 @@ class Elf:
         elfhdr['e_phnum'] = t[9]
         elfhdr['e_shentsize'] = t[10]
         elfhdr['e_shnum'] = t[11]
-        elfhdr['e_shstrndx'] = t[12]    
-        return size
+        elfhdr['e_shstrndx'] = t[12]
+        self.Restore() 
+        
+        self._ehdr = elfhdr
+        return elfhdr 
 
-    def ReadShdr(self, fd, elfhdr, sechdrs, offset=0):
-        """ parse all sections header """
+    def GetShdrs(self):
+        """parse all sections header 
+        """
+        if self._shdrs:
+            return self._shdrs
 
-        off = elfhdr['e_shoff'] + offset
+        elfhdr = self.GetEhdr()
+        off = elfhdr['e_shoff'] 
         num = elfhdr['e_shnum']
         size = elfhdr['e_shentsize']
-        fd.seek(off)
-
+        
+        sechdrs = []
+        m = self.Seek(off)
         for i in range(num):
-            t = struct.unpack('2I4Q2I2Q', fd.read(size))
+            t = struct.unpack('2I4Q2I2Q', m.read(size))
             sec = {}
             sec['sh_name'] = t[0]
             sec['sh_type'] = t[1]
@@ -180,16 +260,24 @@ class Elf:
             sec['sh_addralign'] = t[8]
             sec['sh_entsize'] = t[9]
             sechdrs.append(sec)
-        return 0
+        self.Restore()
 
-    def ReadPhdr(self, fd, elfhdr, proghdrs, offset=0):
+        self._shdrs = sechdrs
+        return sechdrs 
+
+    def GetPhdrs(self):
         """ parse all program header """
 
-        off = elfhdr['e_phoff'] + offset
+        if self._phdrs:
+            return self._phdrs
+
+        elfhdr = self.GetEhdr()
+        off = elfhdr['e_phoff']
         num = elfhdr['e_phnum']
         size = elfhdr['e_phentsize']
-        fd.seek(off)
-
+        
+        proghdrs = []
+        m = self.Seek(off)
         for i in range(num):
             # uint32_t   p_type;
             # uint32_t   p_flags;
@@ -199,7 +287,7 @@ class Elf:
             # uint64_t   p_filesz;
             # uint64_t   p_memsz;
             # uint64_t   p_align;
-            t = struct.unpack('2I6Q', fd.read(size))
+            t = struct.unpack('2I6Q', m.read(size))
             hdr = {}
             hdr['p_type'] = t[0]
             hdr['p_flags'] = t[1]
@@ -210,7 +298,10 @@ class Elf:
             hdr['p_memsz'] = t[6]
             hdr['p_align'] = t[7]
             proghdrs.append(hdr)
-        return 0
+        self.Restore()
+
+        self._phdrs = proghdrs 
+        return hdr 
 
     def SecEntry(self):
         """ for elf shares one mmap entry,
@@ -228,7 +319,8 @@ class Elf:
         self._I_mmap.seek(save)
 
     def GetSection(self, name):
-        """ get Section by name """
+        """get Section by name
+        """
         for s in self._I_shdrs:
             sh_name = self._I_strtab.Str(s['sh_name'])
             if sh_name == name:
@@ -236,10 +328,23 @@ class Elf:
         return None
 
     # TODO: refreform to a independent class to represent it
-    def ReadNote(self, phNoteHdr):
-        m = self._I_mmap
-        m.seek(self._I_offset+phNoteHdr['p_offset']);
-        noteContent = m.read(phNoteHdr['p_memsz']);
+    def GetNotes(self):
+        if self._notes:
+            return self._notes
+
+        phNoteHdr = None
+        for p in self.GetPhdrs():
+            if p['p_type'] == Elf.PHTYPE.NOTE:
+                phNoteHdr = p
+        if phNoteHdr is None:
+            return None
+
+        m = self.Seek(phNoteHdr['p_offset'])
+        size = phNoteHdr['p_memsz']
+        if size == 0:
+            size = phNoteHdr['p_filesz']
+        noteContent = m.read(size);
+
         notes = []
         offset = 0
         while offset < len(noteContent):
@@ -248,22 +353,173 @@ class Elf:
             n_descsz = t[1]
             n_type = t[2]
             offset = offset + 12
-            name = noteContent[offset:offset+n_namesz]
-            offset = offset+n_namesz
-            desc = noteContent[offset:offset+n_descsz]
-            offset = offset+n_descsz
+            name = noteContent[offset:offset + n_namesz]
+            offset = offset + roundup(n_namesz, 4)
+            desc = noteContent[offset:offset + n_descsz]
+            offset = offset + roundup(n_descsz, 4)
             notes.append((name, desc, n_type))
+        self.Restore()
+
+        self._notes = notes
         return notes
 
-    def getProgHdrs(self):
-        return self._I_phdrs
+    @staticmethod
+    def NtFiles(note):
+        o = [] 
 
-    def Load(self, filename, offset=0):
+        def cstr(note, offset):
+            a = note[offset:]
+            i = a.index('\0')
+            assert i > offset
+            return a[:i]
+
+        off = 0
+        t = struct.unpack_from('2Q', note, off)
+        size = t[0]
+        #o['page_size'] = t[1]
+
+        off = 16
+
+        for i in range(size):
+            assert off < len(note)
+            t = struct.unpack_from('3Q', note, off)
+            
+            f = {}
+            f['start_addr'] = t[0]
+            f['end_addr'] = t[1]
+            f['offset'] = t[2]
+            off = off + 24
+            o.append(f)
+
+        names = note[off:].decode('utf8').split('\0')
+
+        for i in range(size):
+            t = names[i]
+            o[i]['name'] = t
+
+        return o
+
+    @staticmethod
+    def NtSigInfo(note):
+        o = {}
+        off = 0
+        t = struct.unpack_from('2Ii', note, off)
+        o['si_signo'] = t[0]
+        o['si_code'] = t[1]
+        o['si_errno'] = t[2]
+        off = off + 16 
+
+        import signal
+        # SIGILL, SIGFPE, SIGSEGV, SIGBUS, SIGTRAP, SIGEMT
+        if o['si_signo'] == signal.SIGILL or \
+            o['si_signo'] == signal.SIGFPE or \
+            o['si_signo'] == signal.SIGSEGV or \
+            o['si_signo'] == signal.SIGBUS or \
+            o['si_signo'] == signal.SIGTRAP:
+            t = struct.unpack_from('Q', note, off)
+            o['addr'] = t[0]
+        else:
+            t = struct.unpack_from('3I', note, off)
+            o['sender_pid'] = t[0]
+            o['sender_uid'] = t[1]
+            o['status'] = t[2]
+        
+        return o
+
+    @staticmethod
+    def timeval(note, off):
+        t = struct.unpack_from('2Q', note, off)
+        return t
+
+    @staticmethod
+    def NtPrStatus(note):
+        o = {}
+        
+        off = 0
+        fmt = '3Ih2x2Q4I8Q'
+        t = struct.unpack_from(fmt, note, off)
+        off = off + struct.calcsize(fmt) 
+        
+        o['si_signo'] = t[0]
+        o['si_code'] = t[1]
+        o['si_errno'] = t[2]
+        o['pr_cursig'] = t[3]
+        o['pr_sigpend'] = t[4]
+        o['pr_sighold'] = t[5]
+        o['pr_pid'] = t[6]
+        o['pr_ppid'] = t[7]
+        o['pr_pgrp'] = t[8]
+        o['pr_sid'] = t[9]
+        o['pr_utime'] = t[10] + t[11] / 1000000.0
+        o['pr_stime'] = t[12] + t[13] / 1000000.0
+        o['pr_cutime'] = t[14] + t[15] / 1000000.0 
+        o['pr_cstime'] = t[16] + t[17] / 1000000.0
+        return o
+    
+    @staticmethod
+    def NtPrPsInfo(note):
+        o = {}
+        off = 0
+        fmt = 'bc2bQ2I4i16s80s'
+        t = struct.unpack_from(fmt, note, off)
+        o['pr_state'] = t[0]
+        o['pr_sname'] = t[1].decode('utf8')
+        o['pr_zomb'] = t[2]
+        o['pr_nice'] = t[3]
+        o['pr_flag'] = t[4]
+        o['pr_uid'] = t[5]
+        o['pr_gid'] = t[6]
+        o['pr_pid'] = t[7]
+        o['pr_ppid'] = t[8]
+        o['pr_pgrp'] = t[9]
+        o['pr_sid'] = t[10]
+        o['pr_fname'] = t[11].decode('utf8').split('\0')[0]
+        o['pr_psargs'] = t[12].decode('utf8').split('\0')[0]
+        return o
+    
+    @staticmethod
+    def NtGnuBuildId(note):
+        return "".join("{:02x}".format(py23.byte2int(c)) for c in note)
+
+    def GetNtFiles(self):
+        for (name, desc, n_type) in self.GetNotes():
+            if n_type == Elf.NTYPE.NT_FILE:
+                return self.NtFiles(desc)
+        return None 
+
+    def GetNtSigInfo(self):
+        for (name, desc, n_type) in self.GetNotes():
+            if n_type == Elf.NTYPE.NT_SIGINFO:
+                return self.NtSigInfo(desc)
+        return None 
+
+    def GetNtPrStatus(self):
+        for (name, desc, n_type) in self.GetNotes():
+            if n_type == Elf.NTYPE.NT_PRSTATUS:
+                return self.NtPrStatus(desc)
+        return None 
+
+    def GetNtPrPsInfo(self):
+        for (name, desc, n_type) in self.GetNotes():
+            if n_type == Elf.NTYPE.NT_PRPSINFO:
+                return self.NtPrPsInfo(desc)
+        return None 
+    
+    def GetBuildId(self):
+        noteBuildId = None
+        for (name, desc, n_type) in self.GetNotes():
+            if name == b'GNU\x00' and n_type == Elf.NTYPE.NT_GNU_BUILD_ID:
+                return self.NtGnuBuildId(desc)
+        return None
+
+    def Load(self, filename):
+        """ Load Elf file to memory
+        """
 
         # open file
         f = open(filename, 'rb')
         self._I_file = f
-        self._I_offset = offset
+        self._I_offset = 0 
 
         # get file size
         f.seek(0, 2)
@@ -272,11 +528,9 @@ class Elf:
 
         # mmap
         m = mmap(f.fileno(), size, access = ACCESS_READ)
-
         self._I_mmap = m
 
-        m.seek(offset)
-
+        m.seek(0)
         magic = m.read(16)
         
         # compact py2 and py3
@@ -291,46 +545,46 @@ class Elf:
             return
 
         # read elf header
-        elfhdr = {}
-        size = self.ReadEhdr(m, elfhdr)
-
-        self._I_ehdr = elfhdr
+        elfhdr = self.GetEhdr()
 
         # read section headers
-        sechdrs = []
-        size = self.ReadShdr(m, elfhdr, sechdrs)
-        self._I_shdrs = sechdrs
+        sechdrs = self.GetShdrs()
         
         # get strtab, strtab maybe not when elf is corefile 
         for s in sechdrs:
             if s['sh_type'] == Elf.SHTYPE.STRTAB:
-                self._I_strtab = Elf.StrTab(self, '.shstrtab', s['sh_offset'], s['sh_size'])
+                self._strtab = Elf.StrTab(self, '.shstrtab', s['sh_offset'], s['sh_size'])
                 break
         # if self._I_strtab is None:
         #     raise Exception
 
         # read Program header
-        proghdrs = []
-        size = self.ReadPhdr(m, elfhdr, proghdrs, offset)
-        self._I_phdrs = proghdrs
-    
-    def LoadCorefileProgElf(self, filename, offset=0):
+        proghdrs = self.GetPhdrs()
 
-        # open file
-        f = open(filename, 'rb')
-        self._I_file = f
+    def AttachV(self, vaddr):
+
+        phdrs = self.GetPhdrs()
+        for i in phdrs:
+            if i['p_flags'] & 0x1 and \
+               vaddr >= i['p_vaddr'] and \
+               vaddr <= i['p_vaddr'] + i['p_memsz']:
+                #print("0x%x %d %d" % (i['p_vaddr'], i['p_filesz'], i['p_offset']))
+                elf = Elf()
+                elf.LoadOffset(self, i['p_offset'])
+                return elf 
+
+        return None
+
+    def LoadOffset(self, elf, offset=0):
+        """Attach an Elf in memory with offset as a new Elf.
+        """
+        assert isinstance(elf, Elf)
+        # as we didn't opened Elf file, _I_file is not saved.
+        self._I_mmap = elf._I_mmap
         self._I_offset = offset
-
-        # get file size
-        f.seek(0, 2)
-        size = f.tell()
-        f.seek(0)
-
-        # mmap
-        m = mmap(f.fileno(), size, access = ACCESS_READ)
-
-        self._I_mmap = m
-
+   
+        #def LoadCorefileProgElf(self, filename, offset=0):
+        m = self._I_mmap
         m.seek(offset)
 
         magic = m.read(16)
@@ -347,20 +601,31 @@ class Elf:
             return
 
         # read elf header
-        elfhdr = {}
-        size = self.ReadEhdr(m, elfhdr)
-
-        self._I_ehdr = elfhdr
+        elfhdr = self.GetEhdr()
         
         # read Program header
-        proghdrs = []
-        size = self.ReadPhdr(m, elfhdr, proghdrs, offset)
-        self._I_phdrs = proghdrs        
+        proghdrs = self.GetPhdrs()
       
     def Unload(self):
-        self._I_mmap.close()
-        self._I_file.close()
+        """Unload Elf created by Load or Attach.
+        """
+        if self._I_file:
+            self._I_mmap.close()
+            self._I_file.close()
         self._I_mmap = None
         self._I_file = None
         print('Elf Unloaded')
 
+    @property
+    def filename(self):
+        if self._I_file:
+            return self._I_file.name
+        return None
+
+    @property
+    def filesize(self):
+        f = self.filename
+        if f:
+            st = os.stat(f)
+            return st.st_size
+        return 0

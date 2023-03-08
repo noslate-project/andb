@@ -19,14 +19,15 @@ def Load():
 
     # load node or shinki 
     from . import node
-    from . import shinki
+    from . import aworker 
+    
     # load node
     if node.LoadDwf():
         print("node loaded.") 
     
     # load shinki
-    elif shinki.LoadDwf():
-        print("shinki loaded.") 
+    elif aworker.LoadDwf():
+        print("aworker loaded.") 
 
     # register all commands
     from . import cli

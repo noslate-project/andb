@@ -425,7 +425,7 @@ class Thread(intf.Thread):
     def BacktraceCurrent(self, parser):
         v8_unwinder.Enable()
         f = gdb.newest_frame()
-        for i in range(100):
+        for i in range(200):
             if f is None:
                 break
             
@@ -437,6 +437,57 @@ class Thread(intf.Thread):
                 print("#%-2d %s" % (i, frame.Description()))
             f = f.older()
         v8_unwinder.Disable()
+
+    @classmethod
+    def GetV8Frames(self, parser):
+        out = []
+        v8_unwinder.Enable()
+        f = gdb.newest_frame()
+        for i in range(1000):
+            if f is None:
+                break
+            
+            frame = Frame(f)
+            v8f = parser(frame)
+            if v8f:
+                out.append(v8f.Flatten())
+            else:
+                out.append(frame.Flatten())
+            f = f.older()
+        v8_unwinder.Disable()
+        return out
+
+    def GetEnviron(self):
+        top = self.GetFrameTop()
+        if top is None:
+            return None
+
+        sp = top.GetSP()
+        if not sp:
+            return None
+        mmap = Target.GetMemoryRegions().Search(sp)
+        if not mmap:
+            return None
+
+        names = []
+        hit = 0
+        addr = mmap.end_address - 8 
+        for i in range(4096*100):
+            p = addr - i
+            c = Target.ReadInt(p, 1)  
+            if c == 0:
+                hit = hit + 1
+            else:
+                hit = 0
+            if hit > 64:
+                print("env: %x" %p)
+                env_start = p + 64 
+                env_end = mmap.end_address - 8
+                env_len = env_end - env_start 
+                names = Target.MemoryRead(env_start, env_len).decode('utf8').split('\0')
+                names = filter(lambda x: x != "", names)
+                break
+        return names
 
 class Symval(intf.Symval):
     pass 
@@ -478,7 +529,7 @@ class Frame(intf.Frame):
         frame_locals = dec.frame_locals()
         if frame_locals is None: return []
         for i in frame_locals:
-            print(i)
+            #print(i)
             out.append(Symval(i.symbol(), i.value()))
         return out
  
@@ -616,6 +667,16 @@ class Target(intf.Target):
             return None
 
     @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        """ Read Symbol address
+        """
+        try:
+            v = gdb.parse_and_eval("&'%s'" % symbol_name)
+            return int(v)
+        except:
+            return None
+
+    @classmethod
     def ReadCStr(cls, address, length=-1):
         """ decode value(char string pointer) to python string
         """
@@ -723,6 +784,7 @@ class Target(intf.Target):
     def MemoryDump(cls, file_to_save, start_address, end_address):
         v = gdb.execute('dump memory %s 0x%x 0x%x' % (file_to_save, start_address, end_address), to_string = True)
         return v
+
 
 """ Stack Frames
 """

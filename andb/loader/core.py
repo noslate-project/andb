@@ -10,48 +10,134 @@ try:
 except ImportError:
     from urllib2 import urlopen
 
-class Corefile:
+class Prog(Elf):
+    """Represents a Elf file.
+    """
+    def __init__(self, addr):
+        pass
 
+    def GetBuildId(self):
+        pass
+
+    def LoadNotes(self):
+        pass
+
+
+class Corefile(object):
+
+    # holds corefile's Elf
     _coreElf = None
-    _progElf = None;
+
+    # holds process's Elf (usually node)
+    _progElf = None
 
     def Load(self, filename):
-        
         # load core elf
+        self._corefile = filename
         self._coreElf = Elf()
         self._coreElf.Load(filename)
 
+        # load prog elf
+        self.LoadProgElf()
 
-        proghdrs = self._coreElf.getProgHdrs()
+    @property
+    def filename(self):
+        return self._coreElf.filename
+
+    @property
+    def filesize(self):
+        return self._coreElf.filesize
+
+    def LoadProgElf(self):
+        if self._progElf:
+            return self._progElf
 
         ## TODO: find progSegOffset from sec .note.maps
+        proghdrs = self._coreElf.GetPhdrs()
 
         #load prog elf
         progSegOffet = proghdrs[1]['p_offset'];
         self._progElf = Elf()
-        self._progElf.LoadCorefileProgElf(filename, progSegOffet)
-        
-    
-    def GetBuildId(self):
+        self._progElf.LoadOffset(self._coreElf, progSegOffet)
+        return self._progElf
 
-        progElfProgHdrs = self._progElf.getProgHdrs()
-
+    def LoadNotes(self):
+        if self._notes:
+            return self._notes
+ 
         # find phNote
         phNoteHdr = None
-        for p in progElfProgHdrs:
+        for p in self._coreElf.GetPhdrs():
             if p['p_type'] == Elf.PHTYPE.NOTE:
                 phNoteHdr = p
 
         # read note via phNoteHdr
-        notes = self._progElf.ReadNote(phNoteHdr)
+        notes = self._progElf.ReadNotes(phNoteHdr)
+        self._notes = notes
+        return notes
 
-        noteBuildId = None
-        for (name, desc, n_type) in notes:
-            if name == b'GNU\x00' and n_type == Elf.NTYPE.NT_GNU_BUILD_ID:
-                noteBuildId = (name, desc, n_type)
+    def GetFilesInfo(self):
+        """Get NT_FILE info from corefile.
+        """
+        files = self._coreElf.GetNtFiles()
+        if files is None:
+            return []
 
-        return "".join("{:02x}".format(py23.byte2int(c)) for c in noteBuildId[1])
+        shared_libs = {}
+        for f in files:
+            if len(f['name']) < 3:
+                continue
+            name = f['name']
+            if name not in shared_libs:
+                lib = {}
+                lib['start_addr'] = f['start_addr']
+                lib['end_addr'] = f['end_addr']
+                shared_libs[name] = lib 
+            else:
+                lib = shared_libs[name]
+                if f['end_addr'] > lib['end_addr']:
+                    lib['end_addr'] = f['end_addr']
+                if f['start_addr'] < lib['start_addr']:
+                    lib['start_addr'] = f['start_addr']
 
+        out = []
+        for k,f in sorted(shared_libs.items(), key=lambda x: x[1]['start_addr']):
+            build_id = ''
+            try:
+                elf = self._coreElf.AttachV(f['start_addr'])
+                if elf:
+                    build_id = elf.GetBuildId()
+            except:
+                pass
+
+            out.append({'start_addr':f['start_addr'], 'end_addr':f['end_addr'], 'name':k, 'build_id':build_id})
+        
+        return out
+
+    def GetBuildId(self):
+        """Get Prog's BuildId
+        """
+        prog = self.LoadProgElf()
+        return prog.GetBuildId()
+
+    def GetSigInfo(self):
+        """Get Corefile's Signal Info
+        """
+        return self._coreElf.GetNtSigInfo()
+
+    def GetPrStatus(self):
+        """Get Corefile's Process Status
+        """
+        return self._coreElf.GetNtPrStatus()
+
+    def GetPrPsInfo(self):
+        """Get Corefile's NT_PRPSINFO
+        """
+        return self._coreElf.GetNtPrPsInfo()
+
+    def GetMemMap(self):
+        phdrs = self._coreElf.GetPhdrs()
+        return phdrs
 
 class CorefileAuxiliaryDownloader:
 

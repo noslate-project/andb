@@ -74,6 +74,7 @@ parser.add_argument('-xf', '--command-file', dest='cmds', action='append', nargs
 parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile.')
 parser.add_argument('--args', nargs=argparse.REMAINDER, help='debugger options')
 parser.add_argument('binary', nargs="?", type=str, help='node or shinki binaray')
+parser.add_argument('-z', '--tsr', action='store_true', help='Generate Technical Support Report.')
 
 args, dbg_opts = parser.parse_known_args()
 
@@ -218,8 +219,30 @@ def MapReduce():
     print('parse  {:.3f}s'.format(t2-t1))
     print('reduce {:.3f}s'.format(t3-t2))
 
-
+def TsrProcess():
+    loader = GetLoader(andb_dir)
+    loader.SetExec(binary)
+    loader.SetTyp(typfile)
+    loader.SetCore(args.core)
+    loader.BatchOn()
+    loader.AddCommandLine('andb tsr')
+    opts = loader.Opts()
+    os.spawnvp(os.P_WAIT, opts[0], opts)
+ 
 if __name__ == '__main__':
+
+    # Generate Technical Support Report.
+    if args.tsr:
+        from andb.loader import TechReport, TechReportText
+        if args.core:
+            TsrProcess()
+            rpt = TechReport(corefileFmt)
+            rpt.Generate("%s.tsr" % args.core)
+        elif args.binary:
+            txt = TechReportText(args.binary)
+            txt.ShowAll()
+        exit(0)
+
     # map reduce mode
     if args.mode:
         # leader the new process group

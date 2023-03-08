@@ -4,16 +4,14 @@ from __future__ import print_function, division
 import andb.dbg as dbg 
 import andb.stl as stl
 
-def IsNode():
-    """Return True if the binary is a node"""
-    t = dbg.Type.LookupType('node::Environment')
+def IsAworker():
+    """Return True if the binary is a aworker"""
+    t = dbg.Type.LookupType('aworker::Immortal')
     if t is None:
-        # not node 
-        return False 
+        # not shinki
+        return False
     return True
 
-""" Base Classes
-"""
 class Struct(dbg.Struct):
     """ represents an Structure/Class in node
     """
@@ -26,23 +24,15 @@ class Enum(dbg.Enum):
     pass
 
 
-class ContextEmbedderIndex(Enum):
-    _typeName = "node::ContextEmbedderIndex"
-
-    kEnvironment = 32 
-
 class Metadata(Struct):
-    """node::Metadata was first introduced by node-v12.
-    """
-    _typeName = "node::Metadata"
+    _typeName = "aworker::Metadata"
 
     def Flatten(self):
         out = {}
 
         out['versions'] = {}
-        versions = self['versions']
-        for i in ('node', 'v8', 'uv', 'zlib', 'napi'):
-            v = stl.String(versions[i])
+        for i in ('aworker', 'v8', 'uv', 'zlib'):
+            v = stl.String(self[i])
             out['versions'][i] = v.toString()
         
         arch = stl.String(self['arch']).toString() 
@@ -51,8 +41,9 @@ class Metadata(Struct):
         out['platform'] = platform
         return out 
 
-class Environment(Struct):
-    _typeName = "node::Environment"
+
+class Immortal(Struct):
+    _typeName = "aworker::Immortal"
 
     _current_environ = None
 
@@ -61,14 +52,13 @@ class Environment(Struct):
         cls._current_environ = pyo
 
     @classmethod
-    def GetCurrent(cls):
+    def GetCurrent(cls, pyo):
         return cls._current_environ
 
-
 def LoadDwf():
-    # check is node
-    if not IsNode():
-        # not node 
+    # check is shinki
+    if not IsAworker():
+        # not shinki
         return 0
 
     Struct.LoadAllDwf()

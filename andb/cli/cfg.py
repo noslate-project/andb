@@ -54,3 +54,15 @@ class cli_andb_opt_chunk_cache(Command):
         v = to_bool(argv[0])
         self.set_value(v)
 
+class cli_andb_tsr(Command):
+    _cxpr = "andb tsr"
+
+    def invoke(self, argv):
+        print("generate TSR")
+        tsr = AndbTechReport()
+        tsr.Generate()
+
+
+from andb.shadow import (
+    AndbTechReport
+)

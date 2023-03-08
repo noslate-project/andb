@@ -195,7 +195,8 @@ class StackFrame(dbg.Frame):
         if isinstance(frame, dbg.Frame):
             dbg.Frame.__init__(self, frame)
             self._address = frame.GetFP()
-            addr = frame.GetFP()
+            #addr = frame.GetFP()
+            self._I_frame = frame._I_frame
         elif isinstance(frame, StackFrame):
             self._I_frame = frame._I_frame
             self._address = frame._address

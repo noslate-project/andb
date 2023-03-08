@@ -127,3 +127,18 @@ class Map(object):
     def node_count(self):
         return self._M_impl['_M_node_count']
 
+class String(object):
+    "std::string"
+
+    def __init__(self, val):
+        self._val = val
+
+    @property
+    def _M_p(self):
+        return self._val['_M_dataplus']['_M_p']
+
+    def toString(self):
+        return self._M_p.GetCString()
+
+    def __str__(self):
+        return self._M_p.GetCString()

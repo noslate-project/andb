@@ -417,6 +417,53 @@ class Thread(intf.Thread):
             else:
                 print(" #%-02d %s" % (i, frame.Description()))
 
+    @classmethod
+    def GetV8Frames(self, parser):
+        out = []
+        thread = process.GetSelectedThread()
+        print(thread)
+        num_frames = thread.GetNumFrames() 
+        for i in range(0, num_frames):
+            frame = Frame(thread.GetFrameAtIndex(i))
+            v8f = parser(frame)
+            if v8f:
+                out.append(v8f.Flatten())
+            else:
+                out.append(frame.Flatten())
+        return out
+
+    def GetEnviron(self):
+        top = self.GetFrameTop()
+        if top is None:
+            return None
+
+        sp = top.GetSP()
+        if not sp:
+            return None
+        mmap = Target.GetMemoryRegions().Search(sp)
+        if not mmap:
+            return None
+
+        names = []
+        hit = 0
+        addr = mmap.end_address - 8 
+        for i in range(4096*100):
+            p = addr - i
+            c = Target.ReadInt(p, 1)  
+            if c == 0:
+                hit = hit + 1
+            else:
+                hit = 0
+            if hit > 64:
+                print("env: %x" %p)
+                env_start = p + 64 
+                env_end = mmap.end_address - 8
+                env_len = env_end - env_start 
+                names = Target.MemoryRead(env_start, env_len).decode('utf8').split('\0')
+                names = filter(lambda x: x != "", names)
+                break
+        return names
+
 
 class Symval(intf.Symval):
     pass
@@ -448,7 +495,7 @@ class Frame(intf.Frame):
 
     def GetPosition(self):
         line_entry = self._I_frame.line_entry
-        return (line_entry.file, line_entry.line)
+        return (str(line_entry.file), int(line_entry.line))
 
 
 class MemoryRegionInfo(intf.MemoryRegionInfo):
@@ -521,6 +568,15 @@ class Target(intf.Target):
         return int(v)
 
     @classmethod
+    def ReadSymbolAddress(cls, symbol_name):
+        s = target.FindSymbols(symbol_name)
+        if not s.IsValid():
+            return None
+        
+        addr = s[0].symbol.addr.GetLoadAddress(target)
+        return int(addr)
+
+    @classmethod
     def GetThreads(cls):
         rob = []
         #process = lldb.debugger.GetSelectedTarget().process
@@ -531,6 +587,15 @@ class Target(intf.Target):
             pyo._I_thread = thread
             rob.append(pyo)
         return rob
+
+    @classmethod
+    def GetCurrentThread(cls):
+        t = process.GetSelectedThread()
+        if t is None:
+            return t
+        o = Thread()
+        o._I_thread = t
+        return o
 
     @classmethod
     def GetMemoryRegions(cls):

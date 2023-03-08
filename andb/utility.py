@@ -194,3 +194,4 @@ def to_bool(value):
     if str(value).lower() in ("no",  "off", "n", "false", "0", "0.0", "", "none"): return False
     raise Exception('Invalid value for boolean conversion: ' + str(value)) 
 
+
