@@ -3,7 +3,6 @@ from __future__ import print_function, division
 import sys
 import os
 import json
-import re
 
 import andb.dbg as dbg
 import andb.v8 as v8
@@ -24,10 +23,11 @@ class AndbTechReport(object):
         env = dbg.Target.GetCurrentThread().GetEnviron()
         
         def omit_secret(line):
-            m = re.search("^(.*secret.*?)=(.*)", line, re.IGNORECASE)
-            if m is None:
+            lower = line.lower()
+            if not 'secret' in lower:
                 return line
-            return m.group(1) + "=***"
+            arr = line.split('=')
+            return arr[0] + "=***"
 
         out = []
         for l in env:

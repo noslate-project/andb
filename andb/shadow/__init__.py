@@ -14,6 +14,6 @@ from .heap_snapshot import (
     HeapSnapshot
 )
 
-from .tech_report import (
+from .report import (
     AndbTechReport
 )
