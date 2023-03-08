@@ -26,7 +26,7 @@ def xpath(tsr, path, default=None):
     return default 
 
 def title(title):
-    print('[ %s ]' % title)
+    print('[ %s ]' % title.upper())
 
 class TechReportText(object):
 
@@ -36,12 +36,30 @@ class TechReportText(object):
   
     @classmethod
     def ShowDict(cls, core, path):
-        siginfo = xpath(core, path)
-        if siginfo is None:
+        d = xpath(core, path)
+        if d is None:
             return
         title(path)
-        for k,v in siginfo.items():
-            print("%s:"%k, v)
+        def _showDict(d, tab=0):
+            for k,v in d.items():
+                if isinstance(v, dict):
+                    print("%*s%s:"%(tab, '', k))
+                    _showDict(v, tab=tab+2)
+                else:
+                    print("%*s%s: %s"%(tab, '', k, v))
+        _showDict(d)
+        print("")
+
+    @classmethod
+    def ShowList(cls, core, path):
+        x = xpath(core, path)
+        if x is None:
+            return 
+        title(path) 
+        for i in range(len(x)):
+            d = x[i]
+            print("%d %s" % (i, d))
+
         print("")
 
     @classmethod
@@ -67,11 +85,30 @@ class TechReportText(object):
 
     @classmethod
     def V8Backtrace(cls, andb):
-        pass
+        def descStr(f):
+            fname = f['function_name']
+            if fname is None or fname == '':
+                fname = "(anonymous)"
+            
+            if fname[0] == '<':
+                return fname
+            
+            args = [] 
+            for arg in f['args']:
+                args.append("%s=%s" % (arg[0], arg[1]))
+            
+            pos = ""
+            if f['position'] and f['position'][0]:
+                pos = "at %s:%s" % (f['position'][0], f['position'][1])
+            return "%s(%s) %s" %(fname, ", ".join(args), pos)
 
-    @classmethod
-    def NodeVersion(cls, andb):
-        nver = xpath(andb, '')
+        frames = xpath(andb, 'frames') 
+        if frames is None:
+            return
+        title("v8 backtrace")
+        for i, f in enumerate(frames):
+            print("#%d"%i, descStr(f))
+        print("")
 
     @classmethod
     def AndbEnv(cls, andb):
@@ -90,23 +127,27 @@ class TechReportText(object):
         title("Noslate Debugger Corefile Report")
         print("tsr_file: %s" % xpath(tsr, 'tsr_file'))
         print("created_time: %s" % xpath(tsr, 'create_time'))
+        print("")
 
         title("Corefile")
         print("file: %s" % xpath(tsr, 'file/name'))
         print("size: %d" % xpath(tsr, 'file/size'))
         print("md5: %s" % xpath(tsr, 'file/md5'))
+        print("")
 
         if 'core' in tsr:
             core = tsr['core']
             self.ShowDict(core, 'siginfo')
             self.ShowDict(core, 'prstatus')
             self.ShowDict(core, 'prpsinfo')
-            self.MMap(core)
+            #self.MMap(core)
 
         if 'andb' in tsr:
             andb = tsr['andb']
             self.ShowDict(andb, 'node_version')
-        
+            self.V8Backtrace(andb)
+            self.ShowList(andb, 'environ')
+
 class TechReport(object):
 
     def __init__(self, corefile):
