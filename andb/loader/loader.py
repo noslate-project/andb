@@ -144,7 +144,8 @@ class LldbLoader(Loader):
         return ['lldb', 
             '-x',  # no any .lldbinit
             '-o', "com sc im %s/init/lldbinit.py" % self._andb_dir,  # lldbinit python script
-            '-s', "%s/init/lldbinit.cmd" % self._andb_dir,             # lldbinit command
+            '-S', "%s/init/lldbpreinit.cmd" % self._andb_dir,        # lldb pre init commands
+            '-s', "%s/init/lldbinit.cmd" % self._andb_dir,           # lldb init command
            ]
 
     def Opts(self):
