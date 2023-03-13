@@ -1942,7 +1942,10 @@ class HeapSnapshot(GraphHolder):
                     cfg.cfgHeapSnapshotShowFreeSapce == 0:
                     continue
 
-                parser.ExtractObject(obj)
+                try:
+                    parser.ExtractObject(obj)
+                except Exception as e:
+                    log.error("Parse <0x%x> failed: %s" % (obj, e))
 
         print("entries: %d, keys(%d), edges: %d, location: %d" % (len(parser.entries_), len(parser.entries_map_.keys()), len(parser.edges_), len(parser.locations_))) 
 
