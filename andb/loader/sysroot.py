@@ -159,6 +159,10 @@ class SysrootMaker(object):
             os.system('cd "%s" && find "../%s" -name \"*.node\" -exec ln -sf {} \;' % (dest, d))
 
     def Makeup(self):
+
+        if not os.path.exists('sysroot'):
+            os.makedirs('sysroot')
+        
         self._files = self._tsr.GetFilesInfo()
 
         for f in self._files:
