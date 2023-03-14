@@ -75,6 +75,7 @@ parser.add_argument('-c', '--core', nargs="?", type=str, help='path to corefile.
 parser.add_argument('--args', nargs=argparse.REMAINDER, help='debugger options')
 parser.add_argument('binary', nargs="?", type=str, help='node or shinki binaray')
 parser.add_argument('-z', '--tsr', action='store_true', help='Generate Technical Support Report.')
+parser.add_argument('--sysroot', action='store_true', help='Makeup sysroot for corefile.')
 
 args, dbg_opts = parser.parse_known_args()
 
@@ -241,6 +242,14 @@ if __name__ == '__main__':
         elif args.binary:
             txt = TechReportText(args.binary)
             txt.ShowAll()
+        exit(0)
+
+    # Makeup sysroot
+    if args.sysroot:
+        from andb.loader import SysrootMaker
+        print('makeup sysroot')
+        srm = SysrootMaker(binary, corefileFmt, sysRoot="sysroot")
+        srm.Makeup()
         exit(0)
 
     # map reduce mode

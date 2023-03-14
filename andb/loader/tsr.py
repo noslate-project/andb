@@ -160,6 +160,9 @@ class TechReport(object):
         out['md5'] = md5(self._core.filename)
         return out
 
+    def GetFilesInfo(self):
+        return self._core.GetFilesInfo()
+
     def GenerateCoreInfo(self):
         """Generate Corefile Info.
         """
