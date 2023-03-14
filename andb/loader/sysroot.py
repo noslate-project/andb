@@ -139,10 +139,12 @@ class SysrootMaker(object):
         if self._node_version is None:
             return 
 
+        # only support tnpm style, for version was in folder name.
         if len(vers) == 3:
             os.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s@%s" % (npm, self._node_version, vers[2], vers[1]))
         elif len(vers) == 5:
-            raise NotImplementedError
+            pkgver = "@%s/%s@%s" % (vers[4], paths[i+2], vers[2])
+            os.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s" % (npm, self._node_version, pkgver))
 
     def InstallLinks(self):
         dest = 'sysroot/lib64'
@@ -151,12 +153,12 @@ class SysrootMaker(object):
         for d in os.listdir('sysroot'):
             if d == 'lib64':
                 continue
-            if not os.path.isdir(d):
+            if not os.path.isdir("%s/%s" % ('sysroot', d)):
                 continue
             print("install %s" % d)
-            os.system('cd "%s" && find "../%s" -name \"*.so\" -exec ln -sf {} \;' % (dest, d))
-            os.system('cd "%s" && find "../%s" -name \"*.so.*\" -exec ln -sf {} \;' % (dest, d))
-            os.system('cd "%s" && find "../%s" -name \"*.node\" -exec ln -sf {} \;' % (dest, d))
+            os.system('cd "%s" && find "../%s" -name "*.so" -exec ln -sf {} \;' % (dest, d))
+            os.system('cd "%s" && find "../%s" -name "*.so.*" -exec ln -sf {} \;' % (dest, d))
+            os.system('cd "%s" && find "../%s" -name "*.node" -exec ln -sf {} \;' % (dest, d))
 
     def Makeup(self):
 
