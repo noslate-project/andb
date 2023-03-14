@@ -11,20 +11,6 @@ except ImportError:
     from urllib2 import Request, urlopen
 import json
 
-def mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        # possibly handle other errno cases here, otherwise finally:
-        else:
-            raise
-
-class Downloader(object):
-    pass
-
-
 class SysrootMaker(object):
 
     # holds tsr 
@@ -59,6 +45,10 @@ class SysrootMaker(object):
     def dwf_sysr_buildid(self, buildId):
         return "%s/%s" % (self._dwf_sysr_dir, buildId) 
 
+    def system(self, args):
+        print("cmd:", args)
+        return os.system(args)
+
     def BuildId(self, path_file):
         p = os.popen('file -L "%s"' % path_file)
         out = p.read()
@@ -77,7 +67,7 @@ class SysrootMaker(object):
         if not os.path.exists(dm):
             os.makedirs(dm)
         outf = "%s/%s" % (dm, jm['name'])
-        os.system("curl %s -o %s"  % (jm['url'], outf))
+        self.system("curl %s -o %s" % (jm['url'], outf))
         jm['local_file'] = outf
         fm = "%s/metadata.json" % dm
         with open(fm, 'w') as f: 
@@ -94,14 +84,14 @@ class SysrootMaker(object):
 
     def InstallDeb(self, meta):
         rpm = meta['local_file']
-        os.system('cd sysroot && rpm2cpio "%s" | cpio -divm' % rpm) 
+        self.system('cd sysroot && rpm2cpio "%s" | cpio -divm' % rpm) 
 
     def InstallRpm(self, meta):
         rpm = meta['local_file']
         lib_d = "sysroot/%s.d" % meta['name']
         if not os.path.exists(lib_d):
             os.makedirs(lib_d)
-        os.system('cd "%s" && rpm2cpio "%s" | cpio -divm' % (lib_d, rpm)) 
+        self.system('cd "%s" && rpm2cpio "%s" | cpio -divm' % (lib_d, rpm)) 
 
     def InstallLibc(self, f):
         """Install libc package"""
@@ -130,7 +120,7 @@ class SysrootMaker(object):
             return
        
         vers = dname.split('@')
-        print(vers) 
+        print(vers)
         
         npm = os.environ.get('NPM')
         if npm is None:
@@ -141,10 +131,10 @@ class SysrootMaker(object):
 
         # only support tnpm style, for version was in folder name.
         if len(vers) == 3:
-            os.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s@%s" % (npm, self._node_version, vers[2], vers[1]))
+            self.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s@%s" % (npm, self._node_version, vers[2], vers[1]))
         elif len(vers) == 5:
             pkgver = "@%s/%s@%s" % (vers[4], paths[i+2], vers[2])
-            os.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s" % (npm, self._node_version, pkgver))
+            self.system("cd sysroot && %s i --target=%s --target_arch=x64 --target_platform=linux %s" % (npm, self._node_version, pkgver))
 
     def InstallLinks(self):
         dest = 'sysroot/lib64'
@@ -156,9 +146,11 @@ class SysrootMaker(object):
             if not os.path.isdir("%s/%s" % ('sysroot', d)):
                 continue
             print("install %s" % d)
-            os.system('cd "%s" && find "../%s" -name "*.so" -exec ln -sf {} \;' % (dest, d))
-            os.system('cd "%s" && find "../%s" -name "*.so.*" -exec ln -sf {} \;' % (dest, d))
-            os.system('cd "%s" && find "../%s" -name "*.node" -exec ln -sf {} \;' % (dest, d))
+            cmd = 'cd "%s" && ' % dest
+
+            for i in ['*.so', '*.so.*', '*.node']:
+                cmd = cmd + 'find "../%s" -name "%s" -exec ln -sf {} \; ; ' % (d, i)
+            self.system(cmd)
 
     def Makeup(self):
 
