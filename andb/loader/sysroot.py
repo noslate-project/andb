@@ -170,7 +170,11 @@ class SysrootMaker(object):
 
         if not os.path.exists('sysroot'):
             os.makedirs('sysroot')
-       
+     
+        # let npm install in sysroot.
+        with open('sysroot/package.json', 'w') as f:
+            f.write('{}')
+
         print("node version:", self._node_version)
         self._files = self._tsr.GetFilesInfo()
 
