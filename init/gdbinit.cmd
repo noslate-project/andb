@@ -8,3 +8,6 @@ set auto-load python-scripts on
 set python print-stack full
 set height 0
 
+set sysroot sysroot
+set solib-search-path sysroot/lib64
+
