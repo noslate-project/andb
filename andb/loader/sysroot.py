@@ -34,7 +34,7 @@ class SysrootMaker(object):
 
     @classmethod
     def GuessNodeVersionFromBinary(cls, binary_path):
-        p = os.popen('strings "%s" | grep -o -E "node-v([0-9\.]+).tar.gz"' % binary_path) 
+        p = os.popen('strings "%s" | grep -o -E "node-v([0-9\.]+).tar.gz"' % binary_path)
         out = p.read()
         p.close()
         m = re.findall("node-v(\d+\.\d+\.\d+)\.*", out)
@@ -43,10 +43,10 @@ class SysrootMaker(object):
         return None
 
     def dwf_sysr_buildid(self, buildId):
-        return "%s/%s" % (self._dwf_sysr_dir, buildId) 
+        return "%s/%s" % (self._dwf_sysr_dir, buildId)
 
     def system(self, args):
-        print("cmd:", args)
+        print("CMD:", args)
         return os.system(args)
 
     def BuildId(self, path_file):
@@ -107,7 +107,7 @@ class SysrootMaker(object):
         """Install npm package"""
         paths = f['name'].split("/")
         if len(paths) < 1:
-            return 
+            return
 
         dname = None
         for i in range(len(paths)-1, 0, -1):
@@ -152,11 +152,26 @@ class SysrootMaker(object):
                 cmd = cmd + 'find "../%s" -name "%s" -exec ln -sf {} \; ; ' % (d, i)
             self.system(cmd)
 
+    def ValidateFiles(self, files):
+        print("%-30s %-40s %s" % ("FILE", "ORIGIN BUILDID", "INSTALLED BUILDID"))
+        for f in self._files:
+            fname = f['name'].split('/')[-1]
+            bid = self.BuildId("sysroot/lib64/%s" % fname)
+            fbid = f['build_id']
+            match = bid
+            if bid is not None:
+                if bid == fbid:
+                    match = '(matched)'
+            else:
+                match = ''
+            print("%-30s %40s %s" % (fname, fbid, match))
+
     def Makeup(self):
 
         if not os.path.exists('sysroot'):
             os.makedirs('sysroot')
-        
+       
+        print("node version:", self._node_version)
         self._files = self._tsr.GetFilesInfo()
 
         for f in self._files:
@@ -164,6 +179,11 @@ class SysrootMaker(object):
                 self.InstallLibc(f) 
             elif f['name'].find('node_modules') > 0:
                 self.InstallNpm(f) 
-        
+       
+        print('install softlinks')
         self.InstallLinks()
 
+        print('validate files')
+        self.ValidateFiles(self._files)
+
+        print('sysroot makeup done.')
