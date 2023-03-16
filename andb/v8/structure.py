@@ -154,6 +154,10 @@ class Isolate(Struct):
         return self['isolate_data_']['thread_local_top_']
 
     @property
+    def external_memory_(self):
+        return int(self['isolate_data_']['external_memory_'])
+
+    @property
     def id(self):
         return int(self['id_'])
 
@@ -561,6 +565,14 @@ class Heap(Struct):
         external_string_table.IterateAll(v)
         log.debug("Synchronize: (External strings)", level=9)
  
+    def Flatten(self):
+        out = {}
+        spaces = []
+        for i in range(AllocationSpace.LAST_SPACE):
+            space = self.getSpace(i)
+            spaces.append(space.Flatten())
+        out['spaces'] = spaces 
+        return out
 
 class ReadOnlyHeap(Struct):
     _typeName = 'v8::internal::ReadOnlyHeap'
@@ -812,6 +824,17 @@ class Space(Struct):
         for i in self.walkPages():
             chunks.append(i)
         return chunks
+
+    def Flatten(self):
+        out = {}
+        out['name'] = str(self.name)
+        out['committed'] = str(self.committed)
+        out['max_committed'] = str(self.max_committed)
+        arr = []
+        for page in self.walkPages():
+            arr.append({"address": page.BaseAddress(page.area_start), "size": page.size})
+        out['pages'] = arr
+        return out
 
 
 class SpaceWithLinearArea(Space):

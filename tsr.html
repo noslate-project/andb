@@ -10,7 +10,7 @@ table {border-collapse: collapse;}
 .center {text-align: center;}
 .center table { margin-left: auto; margin-right: auto; text-align: left;}
 .center th { text-align: center !important; }
-td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline; min-width: 30px;}
+td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline; min-width: 30px; }
 h1 {font-size: 150%;}
 h2 {font-size: 125%;}
 h3 {font-size: 100%;}
@@ -21,6 +21,8 @@ h3 {font-size: 100%;}
 i {color: #666666; background-color: #cccccc;}
 img {float: right; border: 0px;}
 hr {width: 600px; background-color: #cccccc; border: 0px; height: 1px; color: #000000;}
+.navbar { position: fixed; top: 10px; left: 10px; z-index: 100; border: 1px solid #e0e0e0; background-color: #ffffff; opacity:0.3;}
+.navbar a { margin-left: 3px; margin-right: 3px; font-size: 75%;}
 //--></style>
 <title>Noslate Debugger Report</title></head>
 <body><div class="center">
@@ -47,13 +49,22 @@ hr {width: 600px; background-color: #cccccc; border: 0px; height: 1px; color: #0
 </p>
 </td></tr>
 </table><br />
-</div></body>
+</div>
+<div class="navbar" id="navbar" style="display: none;">
+    <a href="#">Top</a><br />
+    <a href="#v8_backtrace">V8 Backtrace</a><br />
+    <a href="#isolates">Isolates</a><br />
+    <a href="#environ_variables">Environ Variables</a><br />
+    <a href="#nt_files">Load Files</a><br />
+    <a href="#mmap">Memory Maps</a><br />
+</div>
+</body>
 
 <script type="text/javascript">
 const urlParams = new URLSearchParams(window.location.search);
 const tsr_url = urlParams.get('tsr')
 if (tsr_url != null) {
-    document.querySelector("#contents").innerHTML = "<p>loading...</p>";
+    document.querySelector("#contents").innerHTML = "<p>loading... </p>";
     document.querySelector("#contents").style.display = 'block';
     fetch(tsr_url).then(response => response.text()).then((text) => {
         document.querySelector("#contents").innerHTML = LoadTsr(text);
@@ -65,6 +76,10 @@ if (tsr_url != null) {
     })*/
 } else {
     document.querySelector("#load-box").style.display = 'block';
+}
+
+function toTag(name) {
+    return name.replace(/ /g, "_").toLowerCase();
 }
 
 function thX(...v) {
@@ -87,13 +102,20 @@ function xp(tsr, path, def=undefined) {
     let x = tsr;
     try {
         path.split('/').forEach((v) => {
+            if (!x.hasOwnProperty(v)) 
+                throw "no such key";
             x = x[v]
         });
         return x;
     } catch (e) {
         // nothing
-    } 
+    }
     return def;
+}
+
+function hex(x) {
+    if (x == undefined) return "";
+    return '0x' + x.toString(16);
 }
 
 function escapeHtml(unsafe) {
@@ -108,15 +130,39 @@ function escapeHtml(unsafe) {
  class TSR {
     constructor(txt) {
         this.tsr = JSON.parse(txt);
+        this.mmap = this._loadMmap();
+    }
+
+    _loadMmap() {
+        const x = xp(this.tsr, 'core/mmap');
+        if (x == undefined) return [];
+        return x;
+    }
+    
+    mMapNote(start_addr, end_addr, name) {
+        for (let el of this.mmap) {
+            const block_start = el['p_vaddr'];
+            const block_end = block_start + el['p_memsz'];
+            if (block_start == block_end)
+                continue;
+            if (end_addr < block_start)
+                break;
+            if ((block_start <= start_addr && start_addr < block_end) ||
+                (block_start <= end_addr && end_addr < block_end) ||
+                (start_addr <= block_start && block_start < end_addr) ||
+                (start_addr <= block_end && block_end < end_addr)) {
+                el['note'] = name;
+            }
+        }
     }
 
     _list(root, blk, title=undefined) {
         let html = '';
     }
 
-    _dict(tsr, blk) {
+    _dict(tsr, blk=undefined) {
         let html = '';
-        let o = tsr[blk];
+        let o = blk ? tsr[blk] : tsr;
         Object.keys(o).sort().forEach((k) =>{
             if (Object.prototype.toString.call(o[k]) === '[object Object]') {
                 html += this._dict(o, k);
@@ -129,36 +175,35 @@ function escapeHtml(unsafe) {
         return html;
     }
 
-    rDict(tsr, blk) {
-        if (!(blk in tsr)) {
-            return ""; 
-        }
-        let title = blk;
-        let html = `<a name="${title}"></a>`;
-        html += `<h2>${title}</h2>`;
+    rDictX(xpath, title) {
+        let x = xp(this.tsr, xpath);
+        if (x == undefined) return '';
+        let html = ``;
+        html += `<h2 id="${toTag(title)}">${title}</h2>`;
         html += '<table border="0" cellpadding="3" width="600">';
-        html += this._dict(tsr, blk);
+        html += this._dict(x);
         html += '</table><br />';
         return html;       
     }
 
     rCoreNtFiles() {
-        const x = xp(this.tsr, 'core/files', []);
-        let html = '<a name="nt-files"></a>';
-        html += '<h2>NT-FILES</h2>';
+        const x = xp(this.tsr, 'core/files');
+        if (x == undefined) return '';
+        let html = '<h2 id="nt_files"}>NT_FILES</h2>';
         html += '<table border="0" cellpadding="3" width="600">';
         html += thX('', 'start_addr', 'end_addr', 'name', 'build_id');
         x.forEach((el, idx) => {
-            html += tdX(idx, el['start_addr'].toString(16), el['end_addr'].toString(16), el['name'], el['build_id']);
+            html += tdX(idx, hex(el['start_addr']), hex(el['end_addr']), el['name'], el['build_id']);
+            this.mMapNote(el['start_addr'], el['end_addr'], el['name']);
         });
         html += '</table><br />';
         return html;
     }
 
     rCoreMMap() {
-        const x = xp(this.tsr, 'core/mmap', []);
-        let html = '<a name="core-mmap"></a>';
-        html += '<h2>mmap</h2>';
+        const x = this.mmap;
+        if (x == undefined) return '';
+        let html = '<h2 id="mmap"}>Memory Maps</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
         html += thX('#', 'start_addr', 'end_addr', 'flag', 'type', 'size', 'note');
         const flag_str = (v) => {
@@ -171,7 +216,7 @@ function escapeHtml(unsafe) {
         };
         x.forEach((el,idx) => {
             let end_addr = el['p_vaddr'] + el['p_memsz'];
-            html += tdX(idx, el['p_vaddr'].toString(16), end_addr.toString(16), flag_str(el['p_flags']),  el['p_type'], el['p_memsz'], '');
+            html += tdX(idx, hex(el['p_vaddr']), hex(end_addr), flag_str(el['p_flags']),  el['p_type'], el['p_memsz'], el['note']??"");
         }); 
         html += '</table><br />';
         return html;
@@ -182,11 +227,10 @@ function escapeHtml(unsafe) {
             return;
         }
         const core = this.tsr['core'];
-        let html = '<a name="core"></a>';
-        html += '<h1>Corefile details</h1>';
-        html += this.rDict(core, 'siginfo');
-        html += this.rDict(core, 'prstatus');
-        html += this.rDict(core, 'prpsinfo');
+        let html = '<h1>Corefile details</h1>';
+        html += this.rDictX('core/siginfo', 'NT_SIGINFO');
+        html += this.rDictX('core/prstatus', 'NT_PRSTATUS');
+        html += this.rDictX('core/prpsinfo', 'NT_PRPSINFO');
         html += this.rCoreNtFiles();
         html += this.rCoreMMap();
         return html;
@@ -194,8 +238,7 @@ function escapeHtml(unsafe) {
 
     rFile() {
         const tsr = this.tsr;
-        let html = '<a name="tsr"></a>';
-        html += '<h1>' + tsr['tsr_file'] + '</h1>';
+        let html = '<h1>' + tsr['tsr_file'] + '</h1>';
         html += '<table border="0" cellpadding="3" width="600">';
         html += tdX('Create Time', tsr['create_time']);
         html += tdX('File Name', tsr['file']['name']);
@@ -206,13 +249,13 @@ function escapeHtml(unsafe) {
     }
    
     rAndbNodeVersion() {
-        return this.rDict(this.tsr['andb'], 'node_version');
+        return this.rDictX('andb/node_version', 'Node Version');
     }
 
     rAndbV8BackTrace() {
-        const x = xp(this.tsr, 'andb/frames', []);
-        let html = '<a name="v8_bt"></a>';
-        html += '<h2>V8 Backtrace</h2>';
+        const x = xp(this.tsr, 'andb/frames');
+        if (x == undefined) return '';
+        let html = '<h2 id="v8_backtrace">V8 Backtrace</h2>';
         html += '<table border="0" cellpadding="3" width="800">';
         html += thX('#', 'pc',  'function', 'sp');
         const desc_str = (v) => {
@@ -245,10 +288,10 @@ function escapeHtml(unsafe) {
         return html;
     }
 
-    rAndbEnviron() {
-        const x = xp(this.tsr, 'andb/environ', []);
-        let html = '<a name="environ"></a>';
-        html += '<h2>Environ Variables</h2>';
+    rAndbEnviron(xpath, title) {
+        const x = xp(this.tsr, xpath);
+        if (x == undefined) return "";
+        let html = `<h2 id="${toTag(title)}">${title}</h2>`;
         html += '<table border="0" cellpadding="3" style="word-wrap:break-word; word-break:break-all;" width="800">';
         x.forEach((el, idx) => {
             html += tdX(idx, el);
@@ -256,24 +299,65 @@ function escapeHtml(unsafe) {
         html += '</table><br />';
         return html;
     }
+    
+    rV8Heap(x, title) {
+        let html = '';
+        html += '<table border="0" cellpadding="4" style="word-wrap:break-word; word-break:break-all;" width="600">';
+        html += thX('Space Name', 'Committed Size', 'Max Committed', 'Pages Count', 'Pages Size');
+        let total_commit = 0, total_pages = 0, total_pages_size = 0;
+        x['spaces'].forEach((el, idx) => {
+            let pages_size = 0;
+            el['pages'].forEach((p) => {
+                this.mMapNote(p['address'], p['address']+p['size'], `${title}.heap`);
+                pages_size += parseInt(p['size'])
+            });
+            html += tdX(el['name'], el['committed'], el['max_committed'], el['pages'].length, pages_size);
+            total_commit += parseInt(el['committed']);
+            total_pages += el['pages'].length;
+            total_pages_size += pages_size;
+        });
+        html += tdX('Total Memory Size', total_commit, '', total_pages, total_pages_size);
+        html += '</table>';
+        return html;
+    }
+   
+    rIsolates() {
+        const x = xp(this.tsr, 'andb/isolates');
+        if (x == undefined) return "";
+        let html = `<h2 id="isolates">Isolate Details</h2>`
+        x.forEach((el, idx) => {
+            let title = `Isolate:${el['id']}`
+            html += `<h3>${title} @${el['address'].toString(16)}</h3>`;
+            html += '<table border="0" cellpadding="2" style="word-wrap:break-word; word-break:break-all;" width="400">';
+            html += tdX('ID', el['id']);
+            html += tdX('Address', hex(el['address']));
+            html += tdX('External Memory Size', el['external_memory_size']);
+            html += '</table><br />';
+            html += this.rV8Heap(el['heap'], title);
+        }); 
+        html += '<br />';
+        return html;
+    }
 
     rAndb() {
         const tsr = this.tsr;
-        let html = '<a name="andb"></a>';
-        html += '<h1>Andb reveal</h1>';
+        let html = '<h1>Andb reveal</h1>';
         html += this.rAndbV8BackTrace();
-        html += this.rAndbEnviron();
+        html += this.rIsolates();
+        html += this.rAndbEnviron('andb/environ', 'Environ Variables');
+        html += this.rAndbEnviron('andb/init_environ', 'Initial Environ Variables');
         return html;
     }
 }
 
 function LoadTsr(txt) {
-    var html = '<table border="0" cellpadding="3" width="600">';
+    var html = '';
     tsr = new TSR(txt);
     html += tsr.rFile();
     html += tsr.rAndbNodeVersion();
     html += tsr.rAndb();
     html += tsr.rCore();
+    document.querySelector('#navbar').style.display = 'block';
     return html;
 }
 

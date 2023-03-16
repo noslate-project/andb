@@ -714,10 +714,11 @@ class Frame(object):
     def Flatten(self):
         out = {}
         def trycall(fn, dv=None):
+            v = None
             try:
                 v = fn()
-            except:
-                pass
+            except Exception as e:
+                print(e)
             if v is None and dv is not None:
                 return dv
             return v
@@ -894,15 +895,21 @@ class Target:
 
     @classmethod
     def ReadSymbolAddress(cls, symbol_name):
-        """ Get address of symbol. 
+        """ Get address of symbol.
         """
         raise NotImplementedError()
- 
+
+    @classmethod
+    def ReadSymbolValue(cls, symbol_name):
+        """ Get value of symbol.
+        """
+        raise NotImplementedError()
+
     """ String in andb
         andb.dbg can read one-byte or two-byte char string from memory.
-        ReadCStr supports read (utf-8/ascii) strings, 
+        ReadCStr supports read (utf-8/ascii) strings,
         and ReadUStr suports (utf-16) strings.
-        
+
         return: inner python unicode string
     """
     @classmethod
@@ -928,3 +935,4 @@ class Target:
         """ Read double (float) from memory.
         """
         raise NotImplementedError()
+
