@@ -10,7 +10,7 @@ table {border-collapse: collapse;}
 .center {text-align: center;}
 .center table { margin-left: auto; margin-right: auto; text-align: left;}
 .center th { text-align: center !important; }
-td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline; min-width: 30px; }
+td, th { border: 1px solid #000000; font-size: 75%; vertical-align: baseline; min-width: 30px;}
 h1 {font-size: 150%;}
 h2 {font-size: 125%;}
 h3 {font-size: 100%;}
@@ -64,7 +64,7 @@ hr {width: 600px; background-color: #cccccc; border: 0px; height: 1px; color: #0
 const urlParams = new URLSearchParams(window.location.search);
 const tsr_url = urlParams.get('tsr')
 if (tsr_url != null) {
-    document.querySelector("#contents").innerHTML = "<p>loading... </p>";
+    document.querySelector("#contents").innerHTML = "<p>loading...</p>";
     document.querySelector("#contents").style.display = 'block';
     fetch(tsr_url).then(response => response.text()).then((text) => {
         document.querySelector("#contents").innerHTML = LoadTsr(text);
