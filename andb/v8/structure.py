@@ -967,6 +967,18 @@ if Version.major >= 9:
                 chunks.append(i)
             return chunks
 
+        def Flatten(self):
+            out = {}
+            out['name'] = str(self.name)
+            out['committed'] = str(self.committed)
+            out['max_committed'] = str(self.max_committed)
+            arr = []
+            for page in self.walkPages():
+                arr.append({"address": page.BaseAddress(page.area_start), "size": page.size})
+            out['pages'] = arr
+            return out
+
+
 else:
     class ReadOnlySpace(PagedSpace):
         _typeName = 'v8::internal::ReadOnlySpace'
