@@ -155,7 +155,17 @@ class Isolate(Struct):
 
     @property
     def external_memory_(self):
-        return int(self['isolate_data_']['external_memory_'])
+        extmem = None
+        try:
+            return int(self['external_memory_']['total_'])
+        except:
+            pass
+
+        try:
+            return int(self['isolate_data_']['external_memory_'])
+        except:
+            pass
+        return extmem
 
     @property
     def id(self):
