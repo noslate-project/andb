@@ -157,7 +157,7 @@ class Isolate(Struct):
     def external_memory_(self):
         extmem = None
         try:
-            return int(self['external_memory_']['total_'])
+            return self['heap_']['external_memory_']['total_']._unsigned
         except:
             pass
 
