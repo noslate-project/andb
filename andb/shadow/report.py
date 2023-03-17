@@ -24,7 +24,6 @@ class V8IsolateReport(object):
         heap = self._isolate.Heap()
         self._out['address'] = self._isolate.address
         self._out['id'] = self._isolate.id
-        self._out['external_memory_size'] = int(self._isolate.external_memory_)
         self._out['heap'] = heap.Flatten()
         return self._out
 
