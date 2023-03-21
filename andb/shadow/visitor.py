@@ -108,7 +108,7 @@ class IsolateGuesser:
                     # Add Isolate
                     self.GetIsolate(iso)
         self.ShowIsolates()
-        return None
+        return self._isolate_addr_map
 
     def ListFromStack(self):
         """ walk all thread, guess from sp """
@@ -139,7 +139,7 @@ class IsolateGuesser:
                 if self.GetIsolate(iso):
                     break
         self.ShowIsolates()
-        return None
+        return self._isolate_addr_map
 
     def guess_from_tls(self):
         """ guess from thread local storage """

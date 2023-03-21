@@ -95,13 +95,14 @@ class SysrootMaker(object):
 
     def InstallLibc(self, f):
         """Install libc package"""
-        meta = self.GetMeta(f['build_id']) 
-        if meta['type'] == 'rpm':
-            self.InstallRpm(meta)
-        elif meta['type'] == 'deb':
-            self.InstallDeb(meta)
-        else:
-            raise NotImplementedError
+        try:
+            meta = self.GetMeta(f['build_id']) 
+            if meta['type'] == 'rpm':
+                self.InstallRpm(meta)
+            elif meta['type'] == 'deb':
+                self.InstallDeb(meta)
+        except:
+            pass
 
     def InstallNpm(self, f):
         """Install npm package"""

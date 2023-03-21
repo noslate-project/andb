@@ -535,7 +535,9 @@ class Frame(intf.Frame):
  
     def GetPosition(self):
         dec = self.Decorate()
-        return (dec.filename(), dec.line())
+        line = dec.line()
+        if line is None: line = 0
+        return (dec.filename(), line)
 
 class MemoryRegionInfo(intf.MemoryRegionInfo):
     pass
@@ -677,6 +679,16 @@ class Target(intf.Target):
             return None
 
     @classmethod
+    def ReadSymbolValue(cls, symbol_name):
+        """ Read Symbol address
+        """
+        try:
+            v = gdb.parse_and_eval("'%s'" % symbol_name)
+            return int(v)
+        except:
+            return None
+
+    @classmethod
     def ReadCStr(cls, address, length=-1):
         """ decode value(char string pointer) to python string
         """
@@ -774,11 +786,13 @@ class Target(intf.Target):
 
     @classmethod
     def LookupSymbol(cls, symbol_name):
+        """ Inner use only, lldb don't have same api.
+        """
         t, s = gdb.lookup_symbol(symbol_name)
         if t is None:
             return None
         v = t.value()
-        return Value(v) 
+        return Value(v)
 
     @classmethod
     def MemoryDump(cls, file_to_save, start_address, end_address):

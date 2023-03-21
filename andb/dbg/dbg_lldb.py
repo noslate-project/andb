@@ -495,8 +495,9 @@ class Frame(intf.Frame):
 
     def GetPosition(self):
         line_entry = self._I_frame.line_entry
-        return (str(line_entry.file), int(line_entry.line))
-
+        if line_entry.file.IsValid():
+            return (str(line_entry.file), int(line_entry.line))
+        return None
 
 class MemoryRegionInfo(intf.MemoryRegionInfo):
     pass
@@ -575,6 +576,18 @@ class Target(intf.Target):
         
         addr = s[0].symbol.addr.GetLoadAddress(target)
         return int(addr)
+
+    @classmethod
+    def ReadSymbolValue(cls, symbol_name):
+        s = target.FindSymbols(symbol_name)
+        if not s.IsValid():
+            return None
+        
+        sym = s[0].symbol
+        addr = sym.addr.GetLoadAddress(target)
+        size = sym.end_addr.GetLoadAddress(target) - addr
+        assert size == 2 or size == 4 or size == 8
+        return cls.ReadInt(addr, size)
 
     @classmethod
     def GetThreads(cls):
@@ -754,7 +767,7 @@ class Target(intf.Target):
     @classmethod
     def ReadDouble(cls, address):
         data = cls.MemoryRead(address, 8)
-        a = struct.unpack('d', data) 
+        a = struct.unpack('d', data)
         return a[0]
 
 print('lldb debugger loaded')

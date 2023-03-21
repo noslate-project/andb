@@ -107,7 +107,7 @@ class ArenaVisitor:
     @classmethod
     def ParseArena(self, argv):
         if len(argv) == 0:
-            addr = dbg.Target.LookupSymbol('main_arena')
+            addr = dbg.Target.ReadSymbolAddress('main_arena')
         else:
             addr = int(argv[0], 16)
         
