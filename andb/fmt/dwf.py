@@ -6,7 +6,7 @@ from mmap import mmap, ACCESS_READ, ACCESS_WRITE, PAGESIZE
 import struct
 from andb.utility import profiler
 
-import demangler as Demangler
+from . import demangler as Demangler
 
 class Enum(object):
    
@@ -1866,7 +1866,7 @@ class RawDwarf:
         cu = self._cus[0]
         parent = cu.GetFirstDie()
         parent.Decode()
-        parent.DebugPrint()
+        #parent.DebugPrint()
         for die in self.WalkDiesNoChild(parent):
             die.Decode()
             if die.Tag() == TAG.DW_TAG_variable:
