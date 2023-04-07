@@ -84,6 +84,8 @@ andb loader enabled, please use 'andb' command to start debugging.
 [root@660adf574e56 ~]# andb -g -c core.xxx
 ```
 
+andb 和 andb-gdb 克隆在 /root 目录下，如遇版本更新需要手动更新。
+
 ### isolate 的定位
 
 andb 目前内置提供了两个快速找到 Isolate 的方法，
