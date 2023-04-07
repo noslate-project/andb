@@ -69,7 +69,7 @@ dockerfile 基于 Centos7，支持在 apple chip (arm64) 或者 x86_64 的 docke
 
 构建 andb-dev 镜像，
 ```bash
-docker build -t andb-dev -f dockerfile .
+[My-MacBook-Pro andb]$ docker build -t andb-dev -f dockerfile .
 ```
 
 使用 andb-dev 镜像
