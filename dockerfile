@@ -10,8 +10,8 @@ RUN yum clean all && \
     yum install -y llvm-toolset-7.0-lldb-devel llvm-toolset-7.0-python-lldb llvm-toolset-7.0-clang llvm-toolset-7.0-build && \
     yum clean all
 
-WORKDIR /root
-RUN git clone https://github.com/noslate-project/andb.git && \
+RUN cd /root && \
+    git clone https://github.com/noslate-project/andb.git && \
     git clone https://github.com/noslate-project/andb-gdb.git && \
     echo $'source /opt/rh/llvm-toolset-7.0/enable \n\
 cd andb-gdb && source env.sh && cd .. \n\
