@@ -482,6 +482,7 @@ class HeapObject(Object, Value):
         try:
             return self._Brief()
         except:
+            #return self._Brief()
             pass
 
         try:
@@ -525,6 +526,15 @@ class HeapObject(Object, Value):
         elif InstanceType.isFreeSpace(self.instance_type):
             o = FreeSpace(self)
             mid = o.Size()
+   
+        elif InstanceType.isFunctionContext(self.instance_type):
+            o = Context(self)
+            scope_info = ScopeInfo(o.scope_info)
+            mid = scope_info.FunctionName()
+
+        elif InstanceType.isFixedArray(self.instance_type):
+            o = FixedArray(self)
+            mid = "[%d]" % o.length
 
         tag = self.StrongTag()
 
@@ -1697,10 +1707,7 @@ class String(Name):
     def MidBrief(self):
         t = self.Representation()
         length = self.length
-        if length > 128*1024:
-            return "'too long to show...'"
-        else:
-            return self.to_string(recurse_limit=100)
+        return "[%d] %s" % (length, self.to_string(recurse_limit=100))
 
     def ToString(self, length=-1):
         return TextLimit(self.to_string(), limit=length)

@@ -174,7 +174,7 @@ def TextShort(any_str, limit=-1):
         return any_str
 
     def NoNewLine(src):
-        return "'" + src.replace('\r', '').replace('\n', '') + "'"
+        return src.replace('\r', '').replace('\n', '')
 
     # Short string in one line
     if len(any_str) > limit:

@@ -1778,9 +1778,11 @@ class HeapSnapshot(GraphHolder):
         return ay
 
     def SerializeNames(self):
+        def noNewLine(s):
+            return s.replace('\r', '').replace('\n', '')
         ay = ["<dummy>"]
         for s in sorted(self.names_.items(), key = lambda k: k[1]):
-            ay.append(s[0])
+            ay.append(noNewLine(s[0]))
         return ay
 
     def serializer(self, filename):
