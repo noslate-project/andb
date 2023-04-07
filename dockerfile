@@ -15,4 +15,6 @@ RUN cd /root && \
     git clone https://github.com/noslate-project/andb-gdb.git && \
     echo $'source /opt/rh/llvm-toolset-7.0/enable \n\
 cd andb-gdb && source env.sh && cd .. \n\
-cd andb && source env.sh && cd ..' > /root/env.sh
+cd andb && source env.sh && cd ..' > env.sh
+
+WORKDIR /root
