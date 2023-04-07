@@ -62,6 +62,26 @@ andb -l node -c core
 andb -g node -c core
 ```
 
+### Dockerfile
+
+因为环境差异性较大，所以提供了 dockerfile 便于在不同平台上使用。
+dockerfile 基于 Centos7，支持在 apple chip (arm64) 或者 x86_64 的 docker 上使用。
+
+构建 andb-dev 镜像，
+```bash
+docker build -t andb-dev -f dockerfile .
+```
+
+使用 andb-dev 镜像
+```bash
+docker run -it --name andb-dev andb-dev /bin/bash
+# 在容器里
+[root@660adf574e56 ~]# . env.sh
+aarch64-Linux
+env.sh
+andb loader enabled, please use 'andb' command to start debugging.
+```
+
 ### isolate 的定位
 
 andb 目前内置提供了两个快速找到 Isolate 的方法，
