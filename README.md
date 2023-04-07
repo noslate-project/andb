@@ -74,12 +74,14 @@ docker build -t andb-dev -f dockerfile .
 
 使用 andb-dev 镜像
 ```bash
-docker run -it --name andb-dev andb-dev /bin/bash
+# 在主机中
+[My-MacBook-Pro andb]$ docker run -it --name andb-dev andb-dev /bin/bash
 # 在容器里
 [root@660adf574e56 ~]# . env.sh
 aarch64-Linux
 env.sh
 andb loader enabled, please use 'andb' command to start debugging.
+[root@660adf574e56 ~]# andb -g -c core.xxx
 ```
 
 ### isolate 的定位
