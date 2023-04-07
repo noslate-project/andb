@@ -522,6 +522,10 @@ class HeapObject(Object, Value):
             o = Oddball(self)
             mid = o.CamelName()
     
+        elif InstanceType.isFreeSpace(self.instance_type):
+            o = FreeSpace(self)
+            mid = o.Size()
+
         tag = self.StrongTag()
 
         if mid is None:
@@ -2824,8 +2828,9 @@ class JSObject(JSReceiver):
         if self.has_fast_properties:
             # not a dictionary map
             descs = self.descriptors_array
-            nof_inobject_prop = self.map.number_of_inobjects
-            for i in range(self.number_of_own_descriptors):
+            #nof_inobject_prop = self.map.number_of_inobjects
+            nof_own_descriptors = min(self.number_of_own_descriptors, descs.number_of_descriptors)
+            for i in range(nof_own_descriptors):
                 key = Name(descs.GetKey(i)).ToString()
                 details = descs.GetDetails(i)
                 if details.location == PropertyLocation.kField:

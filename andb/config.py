@@ -4,10 +4,10 @@ from __future__ import print_function, division
 class Config:
 
     """ control the string length in ShortBrief """
-    cfgStringShortLength = 40
+    cfgStringShortLength = 68
 
     """ control the display of string length"""
-    cfgStringLength = 8192 
+    cfgStringLength = 8192
 
     """ control the display element of a array
     """
