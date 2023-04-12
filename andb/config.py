@@ -4,7 +4,7 @@ from __future__ import print_function, division
 class Config:
 
     """ control the string length in ShortBrief """
-    cfgStringShortLength = 68
+    cfgStringShortLength = 50
 
     """ control the display of string length"""
     cfgStringLength = 8192
