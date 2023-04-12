@@ -152,25 +152,35 @@ class Logging:
         if not statement:
             assert statement 
 
+
 def RemovePrefix(src_string, to_remove):
     if src_string.startswith(to_remove):
         return src_string[len(to_remove):]
     return src_string
+
 
 def RemoveSuffix(src_string, to_remove):
     if src_string.endswith(to_remove):
         return src_string[:-len(to_remove)]
     return src_string
 
+
 def TextShort(any_str, limit=-1):
     """ limit string length for shot brief """
     if limit < 0:
         limit = Config.cfgStringShortLength
-   
+
+    if isinstance(any_str, py23.integer_types):
+        return any_str
+
+    def NoNewLine(src):
+        return src.replace('\r', '').replace('\n', '')
+
     # Short string in one line
     if len(any_str) > limit:
-        return (any_str[:limit] + '...').encode('unicode_escape')
-    return any_str 
+        return NoNewLine(any_str[:limit] + '...').encode('unicode_escape')
+    return NoNewLine(any_str)
+
 
 def TextLimit(any_str, limit=-1):
     """ limit string for context output """
@@ -182,10 +192,12 @@ def TextLimit(any_str, limit=-1):
         return any_str[:limit] + '...'
     return any_str
 
+
 def DCHECK(statement, *args):
     """ debug check
     """
     assert statement, args 
+
 
 def to_bool(value):
     """ convert string to bool

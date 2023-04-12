@@ -482,6 +482,7 @@ class HeapObject(Object, Value):
         try:
             return self._Brief()
         except:
+            #return self._Brief()
             pass
 
         try:
@@ -522,6 +523,19 @@ class HeapObject(Object, Value):
             o = Oddball(self)
             mid = o.CamelName()
     
+        elif InstanceType.isFreeSpace(self.instance_type):
+            o = FreeSpace(self)
+            mid = o.Size()
+   
+        elif InstanceType.isFunctionContext(self.instance_type):
+            o = Context(self)
+            scope_info = ScopeInfo(o.scope_info)
+            mid = scope_info.FunctionName()
+
+        elif InstanceType.isFixedArray(self.instance_type):
+            o = FixedArray(self)
+            mid = "[%d]" % o.length
+
         tag = self.StrongTag()
 
         if mid is None:
@@ -1693,10 +1707,7 @@ class String(Name):
     def MidBrief(self):
         t = self.Representation()
         length = self.length
-        if length > 128*1024:
-            return "'too long to show...'"
-        else:
-            return self.to_string(recurse_limit=100)
+        return "[%d] %s" % (length, self.to_string(recurse_limit=100))
 
     def ToString(self, length=-1):
         return TextLimit(self.to_string(), limit=length)
@@ -2824,8 +2835,9 @@ class JSObject(JSReceiver):
         if self.has_fast_properties:
             # not a dictionary map
             descs = self.descriptors_array
-            nof_inobject_prop = self.map.number_of_inobjects
-            for i in range(self.number_of_own_descriptors):
+            #nof_inobject_prop = self.map.number_of_inobjects
+            nof_own_descriptors = min(self.number_of_own_descriptors, descs.number_of_descriptors)
+            for i in range(nof_own_descriptors):
                 key = Name(descs.GetKey(i)).ToString()
                 details = descs.GetDetails(i)
                 if details.location == PropertyLocation.kField:

@@ -12,7 +12,7 @@ from andb.utility import (
     Logging as log,
 )
 
-#print=log.print
+print=log.print
 
 class IsolateGuesser:
     """ guess an isolate address from core.
