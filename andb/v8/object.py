@@ -455,6 +455,9 @@ class HeapObject(Object, Value):
     def IsMap(self):
         # Map Object has instance_type property, get from map's instance_type
         return InstanceType.isMap(self.map.instance_type)
+    
+    def IsAccessorPair(self):
+        return InstanceType.isAccessorPair(self.map.instance_type)
 
     @CachedProperty
     def has_fast_properties(self):
