@@ -908,16 +908,16 @@ class ObjectParser(GraphHolder):
 
     def ExtractReferencesAccessorInfo(self, parent_entry, obj):
         o = v8.AccessorInfo(obj)
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "name", v8.HeapObject(o.name))
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "data", v8.HeapObject(o.data))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "name", v8.HeapObject(o.name))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "getter", v8.HeapObject(o.getter))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "data", v8.HeapObject(o.data))
 
     def ExtractReferencesAccessorPair(self, parent_entry, obj):
         o = v8.AccessorPair(obj)
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "setter", v8.HeapObject(o.setter))
-        self.SetReferenceObject(HeapGraphEdge.kWeak, parent_entry, "getter", v8.HeapObject(o.getter))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "setter", v8.HeapObject(o.setter))
+        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "getter", v8.HeapObject(o.getter))
 
     def ExtractReferencesMap(self, parent_entry, obj):
         # transitions
@@ -1090,6 +1090,16 @@ class ObjectParser(GraphHolder):
             #if func_name is not None:
             #    self.SetReferenceObject(HeapGraphEdge.kContextVariable, entry, local_name, value)
 
+    def ExtractAccessorPairProperty(self, parent_entry, name, obj):
+        o = v8.AccessorPair(obj)
+        setter = v8.HeapObject(o.setter)
+        if not setter.IsOddball():
+            self.SetReferenceObject(HeapGraphEdge.kProperty, parent_entry, "set %s" % name, setter)
+
+        getter = v8.HeapObject(o.getter)
+        if not getter.IsOddball():
+            self.SetReferenceObject(HeapGraphEdge.kProperty, parent_entry, "get %s" % name, getter)
+
     def ExtractReferencesJSObject(self, entry, obj):
         o = v8.JSObject(obj.address)
 
@@ -1101,6 +1111,8 @@ class ObjectParser(GraphHolder):
 
                 child = v8.HeapObject(v)
                 if child.IsHeapObject():
+                    if child.IsAccessorPair():
+                        self.ExtractAccessorPairProperty(entry, k, child);
                     self.SetReferenceObject(HeapGraphEdge.kProperty, entry, k, child)
 
         # extract elements
