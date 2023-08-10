@@ -13,6 +13,7 @@ from . import intf_dbg as intf
 import andb.py23 as py23
 
 inferior = gdb.selected_inferior()
+arch = inferior.architecture().name() 
 
 class BasicTypes:
 
@@ -496,12 +497,18 @@ class Frame(intf.Frame):
     _decorate = None
 
     def GetSP(self):
+        if arch == 'aarch64':
+            return int(self._I_frame.read_register('sp').cast(BasicTypes.u64p_t))
         return int(self._I_frame.read_register('rsp').cast(BasicTypes.u64p_t))
 
     def GetPC(self):
+        if arch == 'aarch64':
+            return int(self._I_frame.read_register('pc').cast(BasicTypes.u64p_t))
         return int(self._I_frame.read_register('rip').cast(BasicTypes.u64p_t))
 
     def GetFP(self):
+        if arch == 'aarch64':
+            return int(self._I_frame.read_register('x29').cast(BasicTypes.u64p_t))
         return int(self._I_frame.read_register('rbp').cast(BasicTypes.u64p_t))
 
     def GetFunctionName(self):
@@ -895,53 +902,105 @@ class FrameId(object):
     def pc(self):
         return self._pc
 
-class V8Unwinder(Unwinder):
-    """ v8 unwinder based on Frame Pointer.
-    """
 
-    def __init__(self):
-        super(V8Unwinder, self).__init__("V8Unwinder")
-        self.enabled = False
-        gdb.unwinder.register_unwinder(None, self, True)
-        print("v8 unwinder registed.")
+if arch == "aarch64":
+    # support for arm64
+    class V8Unwinder(Unwinder):
+        """ v8 unwinder based on Frame Pointer.
+        """
 
-    def Enable(self):
-        self.enabled = True
-        gdb.invalidate_cached_frames()
+        def __init__(self):
+            super(V8Unwinder, self).__init__("V8Unwinder")
+            self.enabled = False
+            gdb.unwinder.register_unwinder(None, self, True)
+            print("v8 unwinder registed.")
 
-    def Disable(self):
-        self.enabled = False 
-        gdb.invalidate_cached_frames()
-    
-    def __call__(self, pending_frame):
-        bp = pending_frame.read_register('rbp')
-        pc = pending_frame.read_register('rip')
-        sp = pending_frame.read_register('rsp')
-        #gdb.write("bp(%x), sp(%x), pc(%x)\n"%(bp, sp, pc)) 
+        def Enable(self):
+            self.enabled = True
+            gdb.invalidate_cached_frames()
 
-        # rbp used as frame pointer
-        base = 8*1024*1024-1
-        if int(bp) & ~base != int(sp) & ~base or int(bp) <= int(sp):
-            return None
+        def Disable(self):
+            self.enabled = False 
+            gdb.invalidate_cached_frames()
 
-        if (bp == 0):
-            return None
+        def __call__(self, pending_frame):
+            bp = pending_frame.read_register('x29')
+            pc = pending_frame.read_register('pc')
+            sp = pending_frame.read_register('sp')
+            #gdb.write("bp(%x), sp(%x), pc(%x)\n"%(bp, sp, pc)) 
 
-        caller_bp = bp.cast(gdb.lookup_type('long').pointer()).dereference()
-        caller_pc = (bp+8).cast(gdb.lookup_type('long').pointer()).dereference()
-        caller_sp = bp + 16 
+            # rbp used as frame pointer
+            base = 8*1024*1024-1
+            if int(bp) & ~base != int(sp) & ~base or int(bp) <= int(sp):
+                return None
 
-        # valid rbp
-        if int(caller_bp) & ~base != int(sp) & ~base:
-            return None
+            if (bp == 0):
+                return None
 
-        frameid = FrameId(sp, pc)
-        unwind_info = pending_frame.create_unwind_info(frameid)
-        unwind_info.add_saved_register('rip', caller_pc)
-        unwind_info.add_saved_register('rsp', caller_sp)
-        unwind_info.add_saved_register('rbp', caller_bp)
-        #unwind_info.level = 0 
-        return unwind_info
+            caller_bp = bp.cast(gdb.lookup_type('long').pointer()).dereference()
+            caller_pc = (bp+8).cast(gdb.lookup_type('long').pointer()).dereference()
+            caller_sp = bp + 16 
+
+            # valid rbp
+            if int(caller_bp) & ~base != int(sp) & ~base:
+                return None
+
+            frameid = FrameId(sp, pc)
+            unwind_info = pending_frame.create_unwind_info(frameid)
+            unwind_info.add_saved_register('pc', caller_pc)
+            unwind_info.add_saved_register('sp', caller_sp)
+            unwind_info.add_saved_register('x29', caller_bp)
+            #unwind_info.level = 0 
+            return unwind_info
+else:
+    # default for x86_64
+    class V8Unwinder(Unwinder):
+        """ v8 unwinder based on Frame Pointer.
+        """
+
+        def __init__(self):
+            super(V8Unwinder, self).__init__("V8Unwinder")
+            self.enabled = False
+            gdb.unwinder.register_unwinder(None, self, True)
+            print("v8 unwinder registed.")
+
+        def Enable(self):
+            self.enabled = True
+            gdb.invalidate_cached_frames()
+
+        def Disable(self):
+            self.enabled = False 
+            gdb.invalidate_cached_frames()
+        
+        def __call__(self, pending_frame):
+            bp = pending_frame.read_register('rbp')
+            pc = pending_frame.read_register('rip')
+            sp = pending_frame.read_register('rsp')
+            #gdb.write("bp(%x), sp(%x), pc(%x)\n"%(bp, sp, pc)) 
+
+            # rbp used as frame pointer
+            base = 8*1024*1024-1
+            if int(bp) & ~base != int(sp) & ~base or int(bp) <= int(sp):
+                return None
+
+            if (bp == 0):
+                return None
+
+            caller_bp = bp.cast(gdb.lookup_type('long').pointer()).dereference()
+            caller_pc = (bp+8).cast(gdb.lookup_type('long').pointer()).dereference()
+            caller_sp = bp + 16 
+
+            # valid rbp
+            if int(caller_bp) & ~base != int(sp) & ~base:
+                return None
+
+            frameid = FrameId(sp, pc)
+            unwind_info = pending_frame.create_unwind_info(frameid)
+            unwind_info.add_saved_register('rip', caller_pc)
+            unwind_info.add_saved_register('rsp', caller_sp)
+            unwind_info.add_saved_register('rbp', caller_bp)
+            #unwind_info.level = 0 
+            return unwind_info
 
 v8_unwinder = V8Unwinder()
 #AndbFrameFilter
