@@ -139,13 +139,32 @@ class Corefile(object):
         phdrs = self._coreElf.GetPhdrs()
         return phdrs
 
+    def ArchName(self):
+        machine = self._coreElf.GetEhdr()['e_machine']
+        if machine == Elf.EMTYPE.EM_X86_64:
+            return "x86_64"
+        elif machine == Elf.EMTYPE.EM_AARCH64:
+            return "aarch64"
+        return None
+
 class CorefileAuxiliaryDownloader:
 
-    _ossBase = 'https://alinode-debugger-info.oss-cn-zhangjiakou.aliyuncs.com/dwf'
+    _ossBase = None
     _place = None
 
-    def __init__(self, place = os.path.expanduser('~/.andb-dwf')):
-        self._place = place
+    def __init__(self, arch):
+        print(arch)
+
+        if arch == "x86_64":
+            self._place = os.path.expanduser('~/.andb-dwf')
+            self._ossBase = 'https://alinode-debugger-info.oss-cn-zhangjiakou.aliyuncs.com/dwf'
+        
+        elif arch == "aarch64":
+            self._place = os.path.expanduser('~/.andb-dwf/aarch64')
+            self._ossBase = 'https://alinode-debugger-info.oss-cn-zhangjiakou.aliyuncs.com/dwf/aarch64'
+       
+        else:
+            raise Exception('Arch %s is supported.' % arch);
 
     def _url_by_version(self, ver):
         """ return url by-version

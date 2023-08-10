@@ -115,8 +115,8 @@ elif args.core:
     corepath = args.core
     corefileFmt = Corefile()
     corefileFmt.Load(corepath)
-
-    corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader()
+    
+    corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader(corefileFmt.ArchName())
     
     if args.tag and len(args.tag) > 0:
         info = corefileAuxiliaryDownloader.FetchByTag(args.tag[0])

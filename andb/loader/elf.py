@@ -100,7 +100,11 @@ class Elf:
         NT_AUXV = 6
         NT_SIGINFO = 0x53494749
         NT_FILE = 0x46494c45
-    
+   
+    class EMTYPE(Enum):
+        EM_X86_64 = 62
+        EM_AARCH64 = 183
+
     class Section:
         """ represents a Section in Elf file. """
 
