@@ -1217,7 +1217,10 @@ class Block:
             elif size == 8: c = 'Q'
             elif size == 1: c = 'B'
             elif size == 2: c = 'H'
-       
+    
+        # support constexpr just return None
+        if c is None: return None
+
         assert c, str(self)
         return struct.unpack(c, self.data[off:(off+size)])[0]
 
