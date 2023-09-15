@@ -1,13 +1,14 @@
 from __future__ import print_function, division
 
 from .visitor import (
-    IsolateGuesser, 
-    ObjectVisitor, 
+    IsolateGuesser,
+    ObjectVisitor,
     HeapVisitor,
     NodeEnvGuesser,
     StackVisitor,
     StringVisitor,
     TestVisitor,
+    AworkerVisitor,
 )
 
 from .heap_snapshot import (

@@ -1,9 +1,12 @@
 
 from __future__ import print_function, division
 
+
 from mmap import mmap, ACCESS_READ, ACCESS_WRITE, PAGESIZE
 import struct
 from andb.utility import profiler
+
+from . import demangler as Demangler
 
 class Enum(object):
    
@@ -1354,6 +1357,7 @@ class RawDwarf:
         self._cus = [] 
         self._cache = {}
         self._enum_cache = {}
+        self._const_cache = {}
 
     def __del__(self):
         self._elf = None
@@ -1810,7 +1814,7 @@ class RawDwarf:
                     inherit_die = die.AtType()
                     inherit_die.Decode()
                     inherit_name = inherit_die.AtName()
-
+                    
                     # we only interesting TorqueGenerated or Base CPP classes
                     if inherit_die.AtName().startswith('TorqueGenerated') or \
                         inherit_die.AtName().startswith('HashTable<') or \
@@ -1820,11 +1824,21 @@ class RawDwarf:
                     
                     continue
 
+                name = die.AtName()
                 const = die.GetConstValue()
+               
+                if name is None:
+                    continue
+
+                # Hard coded, remove it before release.
+                if const is None:
+                    linkage_val = "v8::internal::%s::%s" % (cls_name, name)
+                    #print(linkage_val)
+                    const = self._const_cache.get(linkage_val, None)
+
                 if const is None:
                     continue
-                
-                name = die.AtName()
+
                 #print(" - %s = %d" % (name, const))
                 if name not in consts:
                     consts[name] = int(const)
@@ -1849,12 +1863,40 @@ class RawDwarf:
         WalkInhert(parent, 0)
 
 
+    def ReadAllVariables(self):
+        """from node-v18 lots of const was saved in DW_TAG_variable in CU.
+        """
+        cu = self._cus[0]
+        parent = cu.GetFirstDie()
+        parent.Decode()
+        #parent.DebugPrint()
+        for die in self.WalkDiesNoChild(parent):
+            die.Decode()
+            if die.Tag() == TAG.DW_TAG_variable:
+                linkage_name = die.GetAt(AT.DW_AT_linkage_name)
+                if linkage_name is None:
+                    continue
+
+                try:
+                    demangle_name = str(Demangler.parse(linkage_name.val))
+                    #print(demangle_name)
+                except Exception as e:
+                    print(linkage_name.val, e)
+                    continue
+
+                const = die.GetAt(AT.DW_AT_const_value)
+                if const is None:
+                    continue
+               
+                self._const_cache[demangle_name] = int(const.val)
+
+
 class Dwf:
 
     def __init__(self, filename):
         self.raw = RawDwarf(filename)
         self.raw.Load()
-    
+
     def ReadConst(self, const_key):
         """ read const from typ file.
             

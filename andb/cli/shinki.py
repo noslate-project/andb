@@ -13,12 +13,12 @@ class cli_shinki_metadata(Command):
     def invoke(self, argv):
         pass
 
-class cli_shinki_immortal(CommandPrefix):
+class cli_shinki_immortal(Command):
     _cxpr = "shinki immortal"
 
-class cli_shinki_immortal_guess(Command):
-    _cxpr = "shinki immortal guess"
-
     def invoke(self, argv):
-        pass
+        AworkerVisitor().GuessImmortalFromV8Context()
 
+from andb.shadow import (
+    AworkerVisitor
+)

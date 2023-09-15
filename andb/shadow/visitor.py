@@ -646,7 +646,7 @@ class ObjectVisitor:
 
 class NodeEnvGuesser:
     """ guess a node::Environment address from v8 """
-    
+
 
     def __init__(self):
         iso = v8.Isolate.GetCurrent()
@@ -658,7 +658,7 @@ class NodeEnvGuesser:
     @classmethod
     def IsNode(cls):
         return node.IsNode()
-    
+
     def SetNodeEnv(self, pyo_node_env):
         node.Environment.SetCurrent(node.Environment(pyo_node_env))
         dbg.ConvenienceVariables.Set('node_env', pyo_node_env._I_value)
@@ -682,6 +682,13 @@ class NodeEnvGuesser:
 
 class AworkerVisitor:
 
+    def __init__(self):
+        iso = v8.Isolate.GetCurrent()
+        if iso is None:
+            print('isolate is not set.')
+            raise Exception
+        self._heap = v8.Heap(iso['heap_'].AddressOf())
+
     @classmethod
     def IsAworker(cls):
         return aworker.IsAworker()
@@ -693,6 +700,14 @@ class AworkerVisitor:
         m = aworker.Metadata(addr)
         return m.Flatten()
 
+    def GuessImmortalFromV8Context(self):
+        native_context = self._heap.GetNativeContextList()
+        embedder_data = native_context.GetEmbedderData()
+        # aworker::ContextEmbedderIndex::kImmortal
+        ptr = embedder_data.Get(1)
+        imm = aworker.Immortal(ptr)
+        aworker.Immortal.SetCurrent(imm)
+        dbg.ConvenienceVariables.Set('immortal', imm._I_value)
 
 class StackVisitor:
     """ Visit Stack """
