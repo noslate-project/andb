@@ -129,7 +129,7 @@ Syntax: 'isolate guess stack'
     _cxpr = "isolate guess stack"
 
     def invoke(self, argv):
-        IsolateGuesser().GuessFromStacks()
+        IsolateGuesser().GuessFromStack()
 
 class cli_isolate_list(Command):
     """List all Isolates with summary.

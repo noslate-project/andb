@@ -108,7 +108,7 @@ if args.binary:
     """
     binary = args.binary
 
-elif args.core:
+if args.core:
     """ only corefile
     """
     from andb.loader import CorefileAuxiliaryDownloader, Corefile
@@ -116,20 +116,21 @@ elif args.core:
     corefileFmt = Corefile()
     corefileFmt.Load(corepath)
     
-    corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader(corefileFmt.ArchName())
-    
-    if args.tag and len(args.tag) > 0:
-        info = corefileAuxiliaryDownloader.FetchByTag(args.tag[0])
-    else:
-        buildId = corefileFmt.GetBuildId()
-        print('build-id:', buildId)
-        info = corefileAuxiliaryDownloader.FetchByBuildId(buildId)
+    if not args.binary:
+        corefileAuxiliaryDownloader = CorefileAuxiliaryDownloader(corefileFmt.ArchName())
+        
+        if args.tag and len(args.tag) > 0:
+            info = corefileAuxiliaryDownloader.FetchByTag(args.tag[0])
+        else:
+            buildId = corefileFmt.GetBuildId()
+            print('build-id:', buildId)
+            info = corefileAuxiliaryDownloader.FetchByBuildId(buildId)
 
-    typfile = info['typ']
-    os.environ['ANDB_TYP'] = typfile 
+        typfile = info['typ']
+        os.environ['ANDB_TYP'] = typfile 
 
-    if 'bin' in info:
-        binary = info['bin']
+        if 'bin' in info:
+            binary = info['bin']
 
 def IndexProcess(size):
     loader = GetLoader(andb_dir)
