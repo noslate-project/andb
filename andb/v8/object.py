@@ -2129,8 +2129,8 @@ class Code(HeapObject):
     def __autoLayout(cls):
         return {"layout": [
             {"name": "relocation_info", "type":  Object},
-            {"name": "deoptimization_data", "type":  Object},
-            {"name": "source_position_table", "type":  Object},
+            {"name": "deoptimization_data", "type":  Object, "alias": ["deoptimization_data_or_interpreter_data"]},
+            {"name": "source_position_table", "type":  Object, "alias": ["position_table"]},
             {"name": "code_data_container", "type":  Object},
             {"name": "data_start"},
             {"name": "instruction_size", "type":  int},
@@ -2277,8 +2277,12 @@ class Context(HeapObject):
             return
 
         local_count = scope_info.context_local_count
+        print("%d: %s" % (local_count, self))
+        # TBD: support new hash names in scope_info
+        if local_count >= 75:
+            return
         for i in range(local_count):
-            name = String(scope_info.context_local_names(i)).ToString()
+            name = String(scope_info.GetContextLocalName(i)).ToString()
             o = Object(self.GetLocal(i))
             yield (name, o)
 
@@ -3160,6 +3164,8 @@ class SharedFunctionInfo(HeapObject):
             return {"layout": [
                 {"name": "class_scope_has_private_brand", "bits": 1},
                 {"name": "has_static_private_methods_or_accessors", "bits": 1},
+                # v10 added
+                {"name": "maglev_compilation_failed", "bits": 1},
             ]}
 
     @classmethod
@@ -3828,7 +3834,11 @@ class AccessorInfo(HeapObject):
 """
 
 # for v9 v8 engine
-if Version.major >= 9:
+if Version.major >= 10:
+    from .object_v10 import ScopeInfo
+    from .object_v10 import StringTable
+
+elif Version.major >= 9:
     from .object_v9 import SloppyArgumentsElements
     from .object_v9 import StrongDescriptorArray
     from .object_v9 import SwissNameDictionary
@@ -3919,7 +3929,7 @@ class ObjectMap:
                 {'name': 'JS_PROXY_TYPE', 'type': JSProxy},
         ]
 
-        if Version.major >= 9:
+        if Version.major == 9:
             types.extend([
                 {'name': 'SLOPPY_ARGUMENTS_ELEMENTS_TYPE', 'type': SloppyArgumentsElements},
                 {'name': 'STRONG_DESCRIPTOR_ARRAY_TYPE', 'type': StrongDescriptorArray},

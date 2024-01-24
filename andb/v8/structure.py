@@ -635,6 +635,8 @@ class MemoryChunk(Struct):
 
     def getSpace(self):
         v = self['owner_']['_M_b']['_M_p']
+        if v == 0:
+            return None 
         return PagedSpace(v)
 
     @property
@@ -872,6 +874,7 @@ class SpaceWithLinearArea(Space):
     def top(self):
         if self._CacheTop is not None:
             return self._CacheTop
+        print(self)
         self._CacheTop = int(self['allocation_info_']['top_'])
         return self._CacheTop
 

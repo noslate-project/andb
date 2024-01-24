@@ -522,6 +522,7 @@ class GraphHolder(object):
             shared = o.shared_function_info
             script = shared.script
             if script is not None:
+                print(shared)
                 name = "%s %s" % (shared.NameStr(), script.name)
             else:
                 name = shared.NameStr()
@@ -1105,7 +1106,8 @@ class ObjectParser(GraphHolder):
 
         # extract properties
         for (k,d,v) in o.WalkAllProperties():
-            if d.location == v8.PropertyLocation.kField:
+            # v10 don't has the location in slow properties.
+            #if d.location == v8.PropertyLocation.kField:
                 if d.IsDouble():
                     continue
 
@@ -1510,6 +1512,10 @@ class HeapSnapshot(GraphHolder):
             if v8.InstanceType.isFreeSpace(obj.instance_type) and \
                 cfg.cfgHeapSnapshotShowFreeSapce == 0:
                 continue
+
+            # debug only, don't check in.
+            parser.ExtractObject(obj)
+            continue
 
             try:
                 parser.ExtractObject(obj)

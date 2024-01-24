@@ -30,7 +30,7 @@ class Config:
         0: raise exception, and stop the command. 
         1: drop the page, but continue next page. 
     """
-    cfgObjectDecodeFailedAction = 1 
+    cfgObjectDecodeFailedAction = 0 
 
     """ control the output leves
         DEBUG >=10,
