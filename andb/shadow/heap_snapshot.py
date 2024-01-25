@@ -522,7 +522,6 @@ class GraphHolder(object):
             shared = o.shared_function_info
             script = shared.script
             if script is not None:
-                print(shared)
                 name = "%s %s" % (shared.NameStr(), script.name)
             else:
                 name = shared.NameStr()
@@ -1514,8 +1513,8 @@ class HeapSnapshot(GraphHolder):
                 continue
 
             # debug only, don't check in.
-            parser.ExtractObject(obj)
-            continue
+            #parser.ExtractObject(obj)
+            #continue
 
             try:
                 parser.ExtractObject(obj)

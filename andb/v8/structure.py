@@ -874,7 +874,6 @@ class SpaceWithLinearArea(Space):
     def top(self):
         if self._CacheTop is not None:
             return self._CacheTop
-        print(self)
         self._CacheTop = int(self['allocation_info_']['top_'])
         return self._CacheTop
 

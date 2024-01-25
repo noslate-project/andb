@@ -322,7 +322,6 @@ class ReadOnlyPagesObjectIterator:
     def nextPage(self):
         try:
             p = next(self._iter_vector)
-            print(p)
             return MemoryChunk(p)
         except StopIteration:
             #print("finish space")
