@@ -3835,6 +3835,9 @@ class AccessorInfo(HeapObject):
 
 # for v9 v8 engine
 if Version.major >= 10:
+    from .object_v10 import SloppyArgumentsElements
+    from .object_v10 import StrongDescriptorArray
+    from .object_v10 import SwissNameDictionary
     from .object_v10 import ScopeInfo
     from .object_v10 import StringTable
 
@@ -3929,7 +3932,7 @@ class ObjectMap:
                 {'name': 'JS_PROXY_TYPE', 'type': JSProxy},
         ]
 
-        if Version.major == 9:
+        if Version.major >= 9:
             types.extend([
                 {'name': 'SLOPPY_ARGUMENTS_ELEMENTS_TYPE', 'type': SloppyArgumentsElements},
                 {'name': 'STRONG_DESCRIPTOR_ARRAY_TYPE', 'type': StrongDescriptorArray},
