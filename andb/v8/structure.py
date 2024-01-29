@@ -635,6 +635,8 @@ class MemoryChunk(Struct):
 
     def getSpace(self):
         v = self['owner_']['_M_b']['_M_p']
+        if v == 0:
+            return None 
         return PagedSpace(v)
 
     @property

@@ -289,6 +289,9 @@ class ScopeInfo(FixedArray):
             return ''
         return v
 
+    def GetContextLocalName(self, index):
+        return self.context_local_names(index)
+
 
 """ tail imports
 """

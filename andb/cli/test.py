@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 from __future__ import print_function, division
 
-from andb.dbg import Command, CommandPrefix, Target, Value, Type
+from andb.dbg import Command, CommandPrefix, Target, Value, Type, MemoryRegions
 from andb.ptmalloc import ArenaVisitor
 from andb.shadow import ObjectVisitor, TestVisitor, HeapSnapshot
 
@@ -65,6 +65,44 @@ class cli_test_single(Command):
     def invoke(self, argv):
         TestVisitor().SingleValue(argv)
 
+
+""" stack command
+"""
+class cli_stack(CommandPrefix):
+    _cxpr = "ss"
+
+class cli_stack_stack(Command):
+    _cxpr = "ss guess"
+
+    def invoke(self, argv):
+        far = 4*1024 
+        if len(argv) == 1:
+            far = int(argv[0]) // 8 * 8
+
+        t = Target.GetCurrentThread()
+        sp = t.GetFrameTop().GetSP()
+        segs = Target.GetMemoryRegions().Load()
+        seg = MemoryRegions.Lookup(segs, sp) 
+        sp_low = sp - far 
+        print("sp: %x, far: %d, seq: %s" % (sp, far, seg))
+
+        for x in range(sp_low, seg._I_end_address, 8):
+            if x == sp:
+                print("0x%x : <===== RSP ======>" % x)
+                continue
+
+            p = Target.ReadInt(x, 8)
+            if p == 0: continue
+            seg = MemoryRegions.Lookup(segs, p) 
+            if seg is None or not seg.IsExecutable(): continue
+            v = Target.TryDecodeIr(p) 
+            print("0x%x :" % x, v)
+            if v.find('in clone (') > 0 or \
+               v.find('in main (') > 0: 
+                break;
+
+""" mm command
+"""
 class cli_mm(CommandPrefix):
     _cxpr = "mm"
 
@@ -99,7 +137,7 @@ class cli_mm_find(Command):
             if r is not None:
                 cnt += len(r)
                 for i in r:
-                    print("0x%x"%i)
+                    print("0x%x in %s" % (i, m))
         print("Found %d" % cnt)
 
 
@@ -120,14 +158,54 @@ class cli_mm_walk(Command):
         if len(argv) > 2:
             only_inuse = bool(argv[2])
         ArenaVisitor.WalkChunks(start, end, only_inuse)
-        print(only_inuse)
+
+class cli_mm_locate(Command):
+    _cxpr = "mm locate"
+
+    def invoke(self, argv):
+
+        if len(argv) == 3:
+            start = int(argv[0], 16)
+            end = int(argv[1], 16)
+            addr = int(argv[2], 16)
+        elif len(argv) == 1:
+            addr = int(argv[0], 16)
+            a = Target.GetMemoryRegions()
+            mro = None
+            for m in a._I_regions:
+                if addr >= m._I_start_address and addr <= m._I_end_address:
+                    mro = m
+                    break
+            if mro is None:
+                print('seg not found.')
+                return
+
+            d = Target.ReadInt(m._I_start_address)
+            if d == m._I_start_address + 0x20:
+                # thread arena
+                start = m._I_start_address + 0x8b0
+            else:
+                print("for main_arena <start> and <end> address should be specified.")
+                return 
+                start = m._I_start_address
+            end = m._I_end_address
+        else:
+            print("mm locate <addr>")
+            print("mm locate <start> <end> <addr>")
+            return
+
+        ArenaVisitor.LocateChunk(start, end, addr)
 
 class cli_mm_addr(Command):
     _cxpr = "mm address"
 
     def invoke(self, argv):
-        pass
-
+        addr = int(argv[0], 16)
+        a = Target.GetMemoryRegions()
+        cnt = 0
+        for m in a._I_regions:
+            if addr >= m._I_start_address and addr <= m._I_end_address:
+                print(m) 
 
 class cli_objgraph(CommandPrefix):
     _cxpr = "og"

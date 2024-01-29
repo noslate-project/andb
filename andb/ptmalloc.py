@@ -137,7 +137,7 @@ class ArenaVisitor:
         size_inuse = 0
         size_freed = 0
         saved_chunk = None
-        
+       
         while i < end:
             chunk = malloc_chunk(i)
            
@@ -157,5 +157,25 @@ class ArenaVisitor:
             i += chunk.GetSize()
 
         print("total %u, inuse(%u), freed(%u)" %( end - start, size_inuse, size_freed))
+
+    @classmethod
+    def LocateChunk(self, start, end, address):
+        i = start
+        saved_chunk = None
+
+        while i < end:
+            chunk = malloc_chunk(i)
+           
+            if saved_chunk is not None:
+                # skip malloc_chunk header (+16)
+                print("0x%x : %d Bytes %s" % (saved_chunk.address+16, saved_chunk.GetSize(), 
+                    "inuse" if chunk.IsPrevInUse() else "freed"))
+                return
+            
+            # in range 
+            if address >= i and address <= (i+chunk.GetSize()):
+                saved_chunk = chunk
+            
+            i += chunk.GetSize()
 
 Struct.LoadAllDwf()

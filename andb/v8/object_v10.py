@@ -23,7 +23,33 @@ from .object import (
     FixedArray,
     DescriptorArray,
     SmiTagged,
+    HashTable,
+    BaseShape,
 )
+
+
+class NameToIndexShape(BaseShape): 
+    _typeName = 'v8::internal::NameToIndexShape'
+
+    kEntrySize = 2
+
+class NameToIndexHashTable(HashTable, NameToIndexShape):
+    _typeName = 'v8::internal::NameToIndexHashTable'
+    
+    kEntryKeyIndex = 0
+    kEntryValueIndex = 1
+    kElementsStartIndex = 5
+
+    # parse the hash table to Array.
+    # TBD: may cache for speedup.
+    def ToArray(self):
+        o = [None] * self.number_of_elements
+        for i in range(self.capacity):
+            s = self.KeyAt(i)
+            if self.isKey(s):
+                x = Smi.cToInt(self.ValueAt(i))
+                o[x] = s
+        return o
 
 
 class ScopeFlags(BitField):
@@ -35,8 +61,8 @@ class ScopeFlags(BitField):
             {"name": "language_mode", "bits": 1},
             {"name": "declaration_scope", "bits": 1},
             {"name": "receiver_variable", "bits": 2, "type": VariableAllocationInfo},
-            {"name": "has_class_brand", "bits": 1},
-            {"name": "has_saved_class_variable_index", "bits": 1},
+            {"name": "class_scope_has_private_brand", "bits": 1},
+            {"name": "has_saved_class_variable_index", "bits": 1, 'alias': ['has_saved_class_variable']},
             {"name": "has_new_target", "bits": 1},
             {"name": "function_variable", "bits": 2, "type": VariableAllocationInfo},
             {"name": "has_inferred_function_name", "bits": 1},
@@ -125,16 +151,19 @@ class ScopeInfo(HeapObject):
     kFunctionNameEntries = 2
     kModuleVariableEntryLength = 3
 
+    # TBD: v10 changed context_local_names to hash
+
     @classmethod
     def __autoLayout(cls):
         return {"layout": [
             {"name": "flags", "type": SmiTagged(ScopeFlags)},
             {"name": "parameter_count", "type": Smi},
             {"name": "context_local_count", "type": SmiTagged(int)},
-            {"name": "context_local_names[context_local_count]", "type": String},
+            {"name": "context_local_names[context_local_count_or_zero]", "type": String},
+            {"name": "context_local_names_hashtable?[has_local_names_hashtable]", "type": NameToIndexHashTable},
             {"name": "context_local_infos[context_local_count]", "type": SmiTagged(VariableProperties)},
             {"name": "saved_class_variable_info?[has_saved_class_variable_index]", "type":  Smi},
-            {"name": "receiver_info?[has_receiver_info]", "type": Smi},
+            #{"name": "receiver_info?[has_receiver_info]", "type": Smi},
             {"name": "function_variable_info?[has_function_variable_info]", "type": FunctionVariableInfo},
             {"name": "inferred_function_name?[has_inferred_function_name]", "type": Object},  # String | Undefined
             {"name": "position_info?[has_position_info]", "type": PositionInfo},
@@ -152,6 +181,16 @@ class ScopeInfo(HeapObject):
     @property
     def has_saved_class_variable_index(self):
         return self.flags.has_saved_class_variable_index
+
+    @property
+    def has_local_names_hashtable(self):
+        return not self.IsInline()
+
+    @property
+    def context_local_count_or_zero(self):
+        if self.has_local_names_hashtable:
+            return 0
+        return self.context_local_count
 
     @property
     def has_receiver_info(self):
@@ -196,7 +235,12 @@ class ScopeInfo(HeapObject):
         return False
 
     def GetContextLocalName(self, index):
-        return self.context_local_names(index)
+        if self.has_local_names_hashtable:
+            o = self.context_local_names_hashtable
+            tbl = o.ToArray()
+            v = tbl[index] 
+            return v 
+        return self.context_local_names(index);
 
     def AllocateSize(self):
         return self.module_variables__offset_end
@@ -234,6 +278,9 @@ class ScopeInfo(HeapObject):
         if v is None:
             return ''
         return v 
+
+    def IsInline(self):
+        return self.context_local_count < Internal.kScopeInfoMaxInlinedLocalNamesSize 
 
     def Name(self):
         if self.has_function_variable_info:

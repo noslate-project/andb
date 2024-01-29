@@ -300,7 +300,10 @@ class Value(object):
     @property
     def _unsigned(self):
         s = self.size
-        if s == 8:
+        if s == 16:
+            print('for 16 bytes, only read first 8 bytes');
+            return self.LoadU64(0)
+        elif s == 8:
             return self.LoadU64(0)
         elif s == 4:
             return self.LoadU32(0)
@@ -309,7 +312,10 @@ class Value(object):
     @property
     def _signed(self):
         s = self.size
-        if s == 8:
+        if s == 16:
+            print('for 16 bytes, only read first 8 bytes');
+            return self.LoadS64(0)
+        elif s == 8:
             return self.LoadS64(0)
         elif s == 4:
             return self.LoadS32(0)

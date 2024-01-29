@@ -2129,8 +2129,8 @@ class Code(HeapObject):
     def __autoLayout(cls):
         return {"layout": [
             {"name": "relocation_info", "type":  Object},
-            {"name": "deoptimization_data", "type":  Object},
-            {"name": "source_position_table", "type":  Object},
+            {"name": "deoptimization_data", "type":  Object, "alias": ["deoptimization_data_or_interpreter_data"]},
+            {"name": "source_position_table", "type":  Object, "alias": ["position_table"]},
             {"name": "code_data_container", "type":  Object},
             {"name": "data_start"},
             {"name": "instruction_size", "type":  int},
@@ -2278,7 +2278,7 @@ class Context(HeapObject):
 
         local_count = scope_info.context_local_count
         for i in range(local_count):
-            name = String(scope_info.context_local_names(i)).ToString()
+            name = String(scope_info.GetContextLocalName(i)).ToString()
             o = Object(self.GetLocal(i))
             yield (name, o)
 
@@ -3157,10 +3157,15 @@ class SharedFunctionInfo(HeapObject):
 
         @classmethod
         def __autoLayout(cls):
-            return {"layout": [
+            layout = [
                 {"name": "class_scope_has_private_brand", "bits": 1},
                 {"name": "has_static_private_methods_or_accessors", "bits": 1},
-            ]}
+            ]
+            if Version.major >= 10:
+                layout.extend([
+                    {"name": "maglev_compilation_failed", "bits": 1},
+                ])
+            return {"layout": layout}
 
     @classmethod
     def __autoLayout(cls):
@@ -3828,7 +3833,15 @@ class AccessorInfo(HeapObject):
 """
 
 # for v9 v8 engine
-if Version.major >= 9:
+if Version.major >= 10:
+    from .object_v10 import SloppyArgumentsElements
+    from .object_v10 import StrongDescriptorArray
+    from .object_v10 import SwissNameDictionary
+    from .object_v10 import ScopeInfo
+    from .object_v10 import StringTable
+    from .object_v10 import NameToIndexHashTable
+
+elif Version.major >= 9:
     from .object_v9 import SloppyArgumentsElements
     from .object_v9 import StrongDescriptorArray
     from .object_v9 import SwissNameDictionary
@@ -3924,6 +3937,11 @@ class ObjectMap:
                 {'name': 'SLOPPY_ARGUMENTS_ELEMENTS_TYPE', 'type': SloppyArgumentsElements},
                 {'name': 'STRONG_DESCRIPTOR_ARRAY_TYPE', 'type': StrongDescriptorArray},
                 {'name': 'SWISS_NAME_DICTIONARY_TYPE', 'type': SwissNameDictionary},
+            ])
+
+        if Version.major >= 10:
+            types.extend([
+                {'name': 'NAME_TO_INDEX_HASH_TABLE_TYPE', 'type': NameToIndexHashTable},
             ])
 
         # install defaults

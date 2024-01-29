@@ -621,6 +621,13 @@ class MemoryRegions(intf.MemoryRegions):
             cls.LoadFromSection()
         return cls._I_regions
 
+    @staticmethod
+    def Lookup(segs, address):
+        for m in segs:
+            if address >=  m._I_start_address and address < m._I_end_address:
+                return m
+        return None
+
 class ConvenienceVariables(object):
 
     @classmethod
@@ -804,6 +811,11 @@ class Target(intf.Target):
     @classmethod
     def MemoryDump(cls, file_to_save, start_address, end_address):
         v = gdb.execute('dump memory %s 0x%x 0x%x' % (file_to_save, start_address, end_address), to_string = True)
+        return v
+
+    @classmethod
+    def TryDecodeIr(cls, addr):
+        v = gdb.execute('x/i 0x%x' % (addr), to_string = True).rstrip()
         return v
 
 

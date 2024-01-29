@@ -59,9 +59,12 @@ class cli_mm_addr(gdb.Command):
         gdb.Command.__init__ (self, "mm address", gdb.COMMAND_USER)
 
     def invoke(self, arg, tty):
+        args = arg.split(" ") 
+        print(args)
         nf = infoFiles()
         addr = int(arg, 16)
         map = nf.findMap(addr)
+        print(map)
         if map:
             print(map)
 
