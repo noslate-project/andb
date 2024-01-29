@@ -195,6 +195,9 @@ class ScopeInfo(HeapObject):
             return True
         return False
 
+    def GetContextLocalName(self, index):
+        return self.context_local_names(index)
+
     def AllocateSize(self):
         return self.module_variables__offset_end
 

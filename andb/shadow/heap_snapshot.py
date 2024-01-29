@@ -1512,10 +1512,6 @@ class HeapSnapshot(GraphHolder):
                 cfg.cfgHeapSnapshotShowFreeSapce == 0:
                 continue
 
-            # debug only, don't check in.
-            #parser.ExtractObject(obj)
-            #continue
-
             try:
                 parser.ExtractObject(obj)
             except Exception as e:

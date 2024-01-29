@@ -199,9 +199,9 @@ class Internal:
     kDescriptorIndexBitCount = 10
     kFirstInobjectPropertyOffsetBitCount = 7
 
-    """ v10 scopeinfo """
-    kScopeInfoMaxInlinedLocalNamesSize = 75
-
+    """ v8 10.x scopeinfo """
+    if Version.major >= 10:
+        kScopeInfoMaxInlinedLocalNamesSize = 75
 
     """ Has methods from globals.h
     """

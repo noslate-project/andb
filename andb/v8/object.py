@@ -3157,12 +3157,15 @@ class SharedFunctionInfo(HeapObject):
 
         @classmethod
         def __autoLayout(cls):
-            return {"layout": [
+            layout = [
                 {"name": "class_scope_has_private_brand", "bits": 1},
                 {"name": "has_static_private_methods_or_accessors", "bits": 1},
-                # v10 added
-                {"name": "maglev_compilation_failed", "bits": 1},
-            ]}
+            ]
+            if Version.major >= 10:
+                layout.extend([
+                    {"name": "maglev_compilation_failed", "bits": 1},
+                ])
+            return {"layout": layout}
 
     @classmethod
     def __autoLayout(cls):
