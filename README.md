@@ -31,9 +31,9 @@ andb 是适用于 gdb/lldb 的 v8 离线调试工具，一般用于调试 v8 的
 
 支持的版本系列：
 * node-v12, v14, v16, v18
-* alindoe-v5, v6, v7
-* noslate-anode 和 noslate-aworker 全系列。
-* 
+* alinode-v5, v6, v7
+* noslate-anode 和 noslate-aworker 全系列
+
 支持 x86_64, aarch64(arm64) 平台的 core 文件分析。
 
 ### 使用方法 
