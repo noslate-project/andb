@@ -103,10 +103,12 @@ class ChunkObjectIterator:
         except:
             print("failed: %x" % ptr)
             return None
-       
-        # current allocation top and limit 
-        if ptr == self._space.top and ptr != self._space.limit:
-            ptr = self._space.limit
+     
+        # readonly page don't have a space
+        if self._space is not None:
+            # current allocation top and limit 
+            if ptr == self._space.top and ptr != self._space.limit:
+                ptr = self._space.limit
         self._next_ptr = ptr
 
         return ho

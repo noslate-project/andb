@@ -43,35 +43,36 @@ class IsolateGuesser:
             return v8.Isolate(_iso)
         return None
 
-    def GuessFromStacks(self):
-        """ walk all thread, guess from sp """
-        for t in dbg.Target.GetThreads():
+    def GuessFromStack(self):
+        """ guess from current sp """
+        t = dbg.Target.GetCurrentThread()
 
-            # get low addres from 'sp'
-            low = t.GetFrameTop().GetSP()
+        # get low addres from 'sp'
+        sp = t.GetFrameTop().GetSP()
 
-            # search for memory region of 'sp'
-            mri = dbg.Target.GetMemoryRegions().Search(low)
+        # search for memory region of 'sp'
+        mri = dbg.Target.GetMemoryRegions().Search(sp)
 
-            # stack range
-            high = mri.end_address
+        # stack range
+        low = sp - 4*1024
+        high = mri.end_address
 
-            for ptr in dbg.Slots(low, high):
+        for ptr in dbg.Slots(low, high):
 
-                if ptr & 0b11 != 0:
-                    continue
+            if ptr & 0b11 != 0:
+                continue
 
-                if ptr < 0x40000:
-                    continue
+            if ptr < 0x40000:
+                continue
 
-                iso = self.CheckIsolate(ptr)
-                if iso is None:
-                    continue
+            iso = self.CheckIsolate(ptr)
+            if iso is None:
+                continue
 
-                # found
-                #print(iso)
-                self.SetIsolate(iso)
-                return iso
+            # found
+            #print(iso)
+            self.SetIsolate(iso)
+            return iso
         return None
 
     def GuessFromPages(self):
