@@ -27,9 +27,14 @@ andb 是适用于 gdb/lldb 的 v8 离线调试工具，一般用于调试 v8 的
 * Linux + gdb 10.0+
 * Linux + lldb 8.0+
 * MacOS + lldb 11+ (catelina, bigsur, monterey)
-* MacOS + gdb 10.0+ (andb-gdb)
+* MacOS + gdb 10.0+ (通过 andb-gdb)
 
-目前仅支持 x86_64 的 core 文件分析。
+支持的版本系列：
+* node-v12, v14, v16, v18
+* alindoe-v5, v6, v7
+* noslate-anode 和 noslate-aworker 全系列。
+* 
+支持 x86_64, aarch64(arm64) 平台的 core 文件分析。
 
 ### 使用方法 
 
