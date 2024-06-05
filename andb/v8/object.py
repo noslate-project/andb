@@ -1421,7 +1421,12 @@ class NameDictionaryShape(BaseShape):
 
     kEntrySize = 3
     kEntryValueIndex = 1
-    kPrefixSize = 2
+    kMatchNeedsHoleCheck = False
+    if Version.major <= 10:
+        kPrefixSize = 2
+    else:
+        kHasDetails = True
+        kPrefixSize = 3
 
 
 class NameDictionary(Dictionary, NameDictionaryShape):
@@ -1482,6 +1487,9 @@ class GlobalDictionaryShape(NameDictionaryShape):
 
     # overrides
     kEntrySize = 1
+    if Version.major >= 11:
+        kMatchNeedsHoleCheck = True
+        kPrefixSize = 2
 
 
 class GlobalDictionary(Dictionary, GlobalDictionaryShape):
@@ -2143,7 +2151,7 @@ class Code(HeapObject):
             {"name": "builtin_index", "type": int},
             {"name": "unaligned_header_size", "type": int},
             #{"name": "optional_padding", "type": int},
-            {"name": "header_size"},
+            {"name": "header_size", "alias": ["kSize"]},
         ]}
 
     @property
@@ -2172,17 +2180,22 @@ class Script(HeapObject):
 
         @classmethod
         def __autoLayout(cls):
-            return {"layout": [
+            layout = [
                 {"name": "compilation_type", "bits": 1},
                 {"name": "compilation_state", "bits": 1},
                 {"name": "is_repl_mode", "bits": 1},
                 {"name": "origin_options", "bits": 4},
                 {"name": "break_on_entry", "bits": 1},
-            ]}
-    
+            ]
+            if Version.major >= 11:
+                layout.extend([
+                    {"name": "produce_compile_hints", "bits": 1},
+                ])
+            return {"layout": layout}
+
     @classmethod
     def __autoLayout(cls):
-        return {"layout":  [
+        layout = [
             {"name": "source", "type": Object},
             {"name": "name", "type": String},
             {"name": "line_offset", "type": Smi},
@@ -2199,7 +2212,14 @@ class Script(HeapObject):
             {"name": "source_url", "type": Object},
             {"name": "source_mapping_url", "type": Object},
             {"name": "host_defined_options", "type": Object},
-        ]}
+        ]
+        if Version.major >= 11:
+            layout.extend([
+                {"name": "shared_function_infos", "type": Object},
+                {"name": "compiled_lazy_function_positions", "type": Object},
+            ])
+
+        return {"layout": layout}
 
     def DebugName(self):
         name = self.name
@@ -2390,15 +2410,28 @@ class DescriptorArray(HeapObject):
 
     @classmethod
     def __autoLayout(cls):
-        return {"layout": [
-            {"name": "number_of_all_descriptors", "type": int},
-            {"name": "number_of_descriptors", "type": int},
-            {"name": "raw_number_of_marked_descriptors", "type": int},
-            {"name": "filler16_bits", "type": int},
-            {"name": "enum_cache", "type": Object},
-            {"name": "descriptors[number_of_all_descriptors]", "type": DescriptorArray.DescriptorEntry,
-                "offset": cls.kHeaderSize},
-        ]}
+        if Version.major < 11:
+            layout = [
+                {"name": "number_of_all_descriptors", "type": int},
+                {"name": "number_of_descriptors", "type": int},
+                {"name": "enum_cache", "type": Object},
+                {"name": "descriptors[number_of_all_descriptors]", "type": DescriptorArray.DescriptorEntry,
+                 "offset": cls.kHeaderSize},
+                {"name": "raw_number_of_marked_descriptors", "type": int},
+                {"name": "filler16_bits", "type": int},
+            ]
+
+        else:
+            layout = [
+                {"name": "number_of_all_descriptors", "type": int},
+                {"name": "number_of_descriptors", "type": int},
+                {"name": "enum_cache", "type": Object},
+                {"name": "descriptors[number_of_all_descriptors]", "type": DescriptorArray.DescriptorEntry,
+                 "offset": cls.kHeaderSize},
+                {"name": "raw_gc_state", "type": int},
+            ]
+
+        return {"layout": layout}
 
     @property
     def number_of_slack_descriptors(self):
@@ -2548,11 +2581,32 @@ class FeedbackVectorFlags(BitField):
 
     @classmethod
     def __autoLayout(cls):
-        return {"layout": [
-            {"name": "optimization_marker", "bits": 3},
-            {"name": "optimization_tier", "bits": 2},
-            {"name": "global_ticks_at_last_runtime_profiler_interrupt", "bits": 24},
-        ]}
+        layout = []
+
+        if Version.major <= 9:
+            layout.extend([
+                {"name": "optimization_marker", "bits": 3},
+                {"name": "optimization_tier", "bits": 2},
+                {"name": "global_ticks_at_last_runtime_profiler_interrupt", "bits": 24},
+            ])
+        elif Version.major == 10:
+            layout.extend([
+                {"name": "tiering_state", "bits": 3},
+                {"name": "maybe_has_optimized_code", "bits": 1},
+                {"name": "osr_tiering_state", "bits": 1},
+                {"name": "all_your_bits_are_belong_to_jgruber", "bits": 27},
+            ])
+        elif Version.major >= 11:
+            layout.extend([
+                {"name": "tiering_state", "bits": 3},
+                {"name": "log_next_execution", "bits": 1},
+                {"name": "maybe_has_maglev_code", "bits": 1},
+                {"name": "maybe_has_turbofan_code", "bits": 1},
+                {"name": "osr_tiering_state", "bits": 1},
+                {"name": "all_your_bits_are_belong_to_jgruber", "bits": 9},
+            ])
+        return {"layout": layout}
+
 
 class FeedbackSlotKind(Enum):
     _typeName = 'v8::internal::FeedbackSlotKind'
@@ -2563,25 +2617,36 @@ class FeedbackVector(HeapObject):
     _typeName = 'v8::internal::FeedbackVector'
 
     kHeaderSize = 48
-    kLengthOffset = 32
-    kFeedbackSlotsOffset = 48
+    if Version.major < 11:
+        kFeedbackSlotsOffset = 48
+    else:
+        kRawFeedbackSlotsOffset = 48
 
     @classmethod
     def __autoLayout(cls):
-        return {
-        "layout": [
-            { "name":"length", "type":int },
-            { "name":"invocation_count", "type":int },
-            { "name":"profiler_ticks", "type":int },
-            { "name":"flags", "type":FeedbackVectorFlags },
-            { "name":"shared_function_info", "type":Object },
-            { "name":"maybe_optimized_code", "type":Object },
-            { "name":"closure_feedback_cell_array", "type":Object },
-            { "name":"feedback_slots[length]", "type":Object },
-        ]}
+        layout = [
+                {"name":"length", "type": int},
+                {"name":"invocation_count", "type": int},
+                {"name":"profiler_ticks", "type": int},
+                {"name":"flags", "type": FeedbackVectorFlags},
+                {"name":"shared_function_info", "type": Object},
+                {"name":"maybe_optimized_code", "type": Object},
+                {"name":"closure_feedback_cell_array", "type": Object},
+                {"name":"feedback_slots[length]", "type": Object},
+            ]
+        if Version.major >= 11:
+            layout.extend([
+                {"name": "placeholder0", "type": int},
+                {"name": "osr_state", "type": Object},
+                {"name": "parent_feedback_cell", "type": Object},
+            ])
+        return {"layout": layout}
 
     def OffsetElementAt(self, index):
-        return self.kFeedbackSlotsOffset + (index * Internal.kTaggedSize)
+        if Version.major < 11:
+            return self.kFeedbackSlotsOffset + (index * Internal.kTaggedSize)
+        else:
+            return self.kRawFeedbackSlotsOffset + (index * Internal.kTaggedSize)
 
     def SizeFor(self, length):
         return self.OffsetElementAt(length)
@@ -3144,11 +3209,16 @@ class SharedFunctionInfo(HeapObject):
                     {"name": "is_safe_to_skip_arguments_adaptor", "bits": 1},
                     {"name": "private_name_lookup_skips_outer_class", "bits": 1},
                 ])
-            elif Version.major > 8:
+            elif Version.major < 11:
                 layout.extend([
                     {"name": "properties_are_final", "bits": 1},
                     {"name": "private_name_lookup_skips_outer_class", "bits": 1},
                     {"name": "osr_code_cache_state", "bits": 2, "type": int},  # OSRCodeCacheStateOfSFI
+                ])
+            elif Version.major >= 11:
+                layout.extend([
+                    {"name": "properties_are_final", "bits": 1},
+                    {"name": "private_name_lookup_skips_outer_class", "bits": 1},
                 ])
 
             return {"layout": layout}
@@ -3161,9 +3231,14 @@ class SharedFunctionInfo(HeapObject):
                 {"name": "class_scope_has_private_brand", "bits": 1},
                 {"name": "has_static_private_methods_or_accessors", "bits": 1},
             ]
-            if Version.major >= 10:
+            if Version.major == 10:
                 layout.extend([
                     {"name": "maglev_compilation_failed", "bits": 1},
+                ])
+            elif Version.major > 10:
+                layout.extend([
+                    {"name": "is_sparkplug_compiling", "bits": 1},
+                    {"name": "sparkplug_compiled", "bits": 1},
                 ])
             return {"layout": layout}
 
@@ -3357,7 +3432,11 @@ class JSAsyncGeneratorObject(JSGeneratorObject):
     _typeName = 'v8::internal::JSAsyncGeneratorObject'
 
     kQueueOffset = 80
-    kIsAwaiting = 88
+    # ~~~
+    if Version.major < 11:
+        kIsAwaiting = 88
+    else:
+        kIsAwaitingOffset = 88
 
     @property
     def queue(self):
@@ -3432,13 +3511,20 @@ class JSArrayBuffer(JSObject):
 
     @classmethod
     def __autoLayout(cls):
-        return {"layout": [
-            {"name": "byte_length", "type": int},
-            {"name": "max_byte_length", "type": int},
+        layout = [
+            {"name": "byte_length",
+                "alias": ["raw_byte_length"], "type": int},
+            {"name": "max_byte_length",
+                "alias": ["raw_max_byte_length"], "type": int},
             {"name": "backing_store", "type": int},
             {"name": "extension", "type": int},
             {"name": "bit_field", "type": JSArrayBuffer.JSArrayBufferFlags},
-        ]}
+        ]
+        if Version.major >= 11:
+            layout.extend([
+                {"name": "detach_key", "type": Object},
+            ])
+        return {"layout": layout}
 
     @CachedProperty
     def is_shared(self):
@@ -3818,22 +3904,44 @@ class AccessorInfo(HeapObject):
 
     @classmethod
     def __autoLayout(cls):
-        return {"layout": [
-            {"name": "name", "type": Name}, 
-            {"name": "flags", "type": SmiTagged(AccessInfoFlags)}, 
-            {"name": "expected_receiver_type", "type": Object}, 
-            {"name": "setter", "type": Object}, 
-            {"name": "getter", "type": Object}, 
-            {"name": "js_getter", "type": Object}, 
-            {"name": "data", "type": Object}, 
-        ]}
+        layout = []
+        if Version.major < 11:
+            layout.extend([
+                {"name": "name", "type": Name},
+                {"name": "flags", "type": SmiTagged(AccessInfoFlags)},
+                {"name": "expected_receiver_type", "type": Object},
+                {"name": "setter", "type": Object},
+                {"name": "getter", "type": Object},
+                {"name": "js_getter", "type": Object},
+                {"name": "data", "type": Object},
+            ])
+        else:
+            layout.extend([
+                {"name": "name", "type": Name},
+                {"name": "data", "type": Object},
+                {"name": "maybe_redirected_getter", "type": Object},
+                {"name": "setter", "type": Object},
+                {"name": "flags", "type": SmiTagged(AccessInfoFlags)},
+            ])
+
+        return {"layout": layout}
 
 
 """ New Objects
 """
 
 # for v9 v8 engine
-if Version.major >= 10:
+if Version.major >= 11:
+    from .object_v11 import SloppyArgumentsElements
+    from .object_v11 import StrongDescriptorArray
+    from .object_v11 import SwissNameDictionary
+    from .object_v11 import ScopeInfo
+    from .object_v11 import StringTable
+    from .object_v11 import NameToIndexHashTable
+    from .object_v11 import WasmNull
+    from .object_v11 import InstructionStream
+
+elif Version.major >= 10:
     from .object_v10 import SloppyArgumentsElements
     from .object_v10 import StrongDescriptorArray
     from .object_v10 import SwissNameDictionary
@@ -3942,6 +4050,12 @@ class ObjectMap:
         if Version.major >= 10:
             types.extend([
                 {'name': 'NAME_TO_INDEX_HASH_TABLE_TYPE', 'type': NameToIndexHashTable},
+            ])
+
+        if Version.major >= 11:
+            types.extend([
+                {'name': 'WASM_NULL_TYPE', 'type': WasmNull},
+                {'name': 'INSTRUCTION_STREAM_TYPE', 'type': InstructionStream},
             ])
 
         # install defaults

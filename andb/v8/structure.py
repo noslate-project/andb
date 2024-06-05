@@ -52,14 +52,39 @@ class CompilationCache(Struct):
 
     kSubCacheCount = 4
 
+    #   CompilationCacheScript script_;
+    #   CompilationCacheEval eval_global_;
+    #   CompilationCacheEval eval_contextual_;
+    #   CompilationCacheRegExp reg_exp_;
+
+    subcaches_ = [
+        "script_",
+        "eval_global_",
+        "eval_contextual_",
+        "reg_exp_",
+    ]
+
     def Iterate(self, v):
         for i in range(self.kSubCacheCount):
-            s = CompilationSubCache(self['subcaches_'][i], self)
+            # print("\t\t===wwwww++==", i, self[self.subcaches_[i]].AddressOf())
+            # print("\t\t===wwwww--==", i, self['subcaches_'][i])
+            if Version.major < 11:
+                temp = self['subcaches_'][i]
+            else:
+                temp = self[self.subcaches_[i]].AddressOf()
+            # print("\t\t=====", temp)
+            if i != 3:
+                s = CompilationSubCache(temp, self)
+            else:
+                s = CompilationCacheRegExp(temp, self)
             s.Iterate(v)
 
 
 class CompilationSubCache(Struct):
-    _typeName = "v8::internal::CompilationSubCache"
+    if Version.major < 11:
+        _typeName = "v8::internal::CompilationSubCache"
+    else:
+        _typeName = "v8::internal::CompilationCacheEvalOrScript"
 
     @property
     def generations(self):
@@ -70,9 +95,21 @@ class CompilationSubCache(Struct):
         # tbl = self['tables_'].cast(t)
         tbl = self['tables_']
         a = tbl[0].address
-        b = tbl[self.generations].address
+        b = tbl[2].address
+        # print('\t\t\t ====: a,b', a, b)
         v.VisitRootPointers(Root.kCompilationCache, None, a, b)
 
+class CompilationCacheRegExp(Struct):
+    _typeName = "v8::internal::CompilationCacheRegExp"
+
+    def Iterate(self, v):
+        # t = gdb.lookup_type('v8::internal::Object').pointer()
+        # tbl = self['tables_'].cast(t)
+        tbl = self['tables_']
+        a = tbl[0].address
+        # b = tbl[2].address
+        # print('\t\t\t ====: a,b', a, b)
+        v.VisitRootPointer(Root.kCompilationCache, None, a)
 
 class Internals(Struct):
     _typeName = 'v8::internal::Internals'
@@ -919,7 +956,10 @@ class SemiSpace(SpaceWithLinearArea):
 
 
 class NewSpace(SpaceWithLinearArea):
-    _typeName = 'v8::internal::NewSpace'
+    if Version.major >= 11:
+        _typeName = 'v8::internal::SemiSpaceNewSpace'
+    else:
+        _typeName = 'v8::internal::NewSpace'
 
     @property
     def to_space(self):

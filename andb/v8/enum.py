@@ -71,9 +71,9 @@ class AllocationSpace(Enum):
 
     @classmethod
     def AllSpaces(cls):
-        return [
+        ret = [
             cls.RO_SPACE,
-            cls.MAP_SPACE,
+            # cls.MAP_SPACE,
             cls.CODE_SPACE,
             cls.CODE_LO_SPACE,
             cls.OLD_SPACE,
@@ -81,11 +81,16 @@ class AllocationSpace(Enum):
             cls.NEW_LO_SPACE,
             cls.NEW_SPACE,
         ]
+        if Version.major < 11:
+            ret.extend([
+                cls.MAP_SPACE
+            ])
+        return ret
 
     @classmethod
     def NonROSpaces(cls):
-        return [
-            cls.MAP_SPACE,
+        ret = [
+            # cls.MAP_SPACE,
             cls.CODE_SPACE,
             cls.CODE_LO_SPACE,
             cls.OLD_SPACE,
@@ -93,16 +98,26 @@ class AllocationSpace(Enum):
             cls.NEW_LO_SPACE,
             cls.NEW_SPACE,
         ]
+        if Version.major < 11:
+            ret.extend([
+                cls.MAP_SPACE
+            ])
+        return ret
 
     @classmethod
     def OnlyOldSpaces(cls):
-        return [
-            cls.MAP_SPACE,
+        ret = [
+            # cls.MAP_SPACE,
             cls.CODE_SPACE,
             cls.CODE_LO_SPACE,
             cls.OLD_SPACE,
             cls.LO_SPACE,
         ]
+        if Version.major < 11:
+            ret.extend([
+                cls.MAP_SPACE
+            ])
+        return ret
 
 
 class AllocationType(Enum):
@@ -575,6 +590,8 @@ class Root(Enum):
             "kDispatchTable": "(Dispatch table)",
             "kBuiltins": "(Builtins)",
             "kGlobalHandles": "(Global handles)",
+            # Traced Handles new in v11
+            "kTracedHandles": "(Traced handles)",
             "kEternalHandles": "(Eternal handles)",
             "kThreadManager": "(Thread manager)",
             "kStrongRoots": "(Strong roots)",
@@ -587,8 +604,6 @@ class Root(Enum):
             "kReadOnlyObjectCache": "(Read-only object cache)",
             "kWeakCollections": "(Weak collections)",
             "kWrapperTracing": "(Wrapper tracing)",
-            "kWriteBarrier": "(Write barrier)",
-            "kRetainMaps": "(Retain maps)",
             # following two types were introduced by V8-v9
             "kWriteBarrier": "(Write barrier)",
             "kRetainMaps": "(Retain maps)",
