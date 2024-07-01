@@ -9,6 +9,8 @@ try:
 except:
     import pickle
 
+from ..v8.internal import Version
+
 import andb.dbg as dbg 
 import andb.v8 as v8
 from andb.config import Config as cfg
@@ -908,11 +910,18 @@ class ObjectParser(GraphHolder):
 
     def ExtractReferencesAccessorInfo(self, parent_entry, obj):
         o = v8.AccessorInfo(obj)
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "name", v8.HeapObject(o.name))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "setter", v8.HeapObject(o.setter))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "getter", v8.HeapObject(o.getter))
-        self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "data", v8.HeapObject(o.data))
+        if Version.major < 11:
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "name", v8.HeapObject(o.name))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "expected_receiver_type", v8.HeapObject(o.expected_receiver_type))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "setter", v8.HeapObject(o.setter))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "getter", v8.HeapObject(o.getter))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "data", v8.HeapObject(o.data))
+        else:
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "name", v8.HeapObject(o.name))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "maybe_redirected_getter", v8.HeapObject(o.maybe_redirected_getter))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "setter", v8.HeapObject(o.setter))
+            # self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "getter", v8.HeapObject(o.getter))
+            self.SetReferenceObject(HeapGraphEdge.kInternal, parent_entry, "data", v8.HeapObject(o.data))
 
     def ExtractReferencesAccessorPair(self, parent_entry, obj):
         o = v8.AccessorPair(obj)
