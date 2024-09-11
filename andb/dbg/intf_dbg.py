@@ -704,9 +704,11 @@ class Frame(object):
             args.append(str(i))
 
         position = ""
-        filename, fileline = self.GetPosition()
-        if filename and fileline:
-            position = "at %s:%d" % (filename, fileline)
+        position_info = self.GetPosition()
+        if position_info:
+            filename, fileline = position_info
+            if filename and fileline:
+                position = "at %s:%d" % (filename, fileline)
 
         if not full:
             return "0x%016x %s(%s) %s" % (
