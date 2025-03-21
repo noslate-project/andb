@@ -464,6 +464,7 @@ class HeapVisitor:
             if s is not None:
                 cnt += len(s)
                 for obj in v8.ChunkObjectIterator(page):
+                    if not obj: continue
                     address = obj.address
                     for p in v8.ObjectSlots(address, address+obj.Size()):
                         if p == tag_to_find:
